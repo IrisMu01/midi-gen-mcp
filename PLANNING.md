@@ -255,16 +255,18 @@ Message('note_off', note=60, time=160)  # delta = 4640 - 4480
 - [x] Unit tests for state operations (8 tests)
 - [x] Unit tests for song, structure, track tools (27 tests total)
 - [x] Unit tests for note operations (17 tests)
-- [x] Unit tests for MIDI export (20 tests)
+- [x] Unit tests for MIDI export (19 tests - removed redundant test)
 - [x] Test undo/redo stack behavior
-- [x] All 72 tests passing
+- [x] All 71 tests passing
 
-### Task 8: Documentation & Commit
-- [ ] Update README with setup instructions
-- [ ] Document tool schemas
-- [x] Commit and push regularly to `claude/plan-mcp-server-cqlSM`
+### Task 8: Documentation & Commit ✅
+- [x] Update README with comprehensive setup instructions
+- [x] Document all 14 tool schemas with examples
+- [x] Add General MIDI instrument mapping reference
+- [x] Document expression syntax and state schema
+- [x] Commit and push regularly to `claude/implement-tasks-1-5-midi-5BHow`
 
-**Current Status**: **72/72 tests passing**. Core MCP server implementation complete with all tools (song, structure, track, note, utility) and full MIDI export functionality.
+**Current Status**: **71/71 tests passing**. Core MCP server implementation complete with all tools (song, structure, track, note, utility) and full MIDI export functionality. Comprehensive README documentation added.
 
 ---
 
@@ -278,7 +280,7 @@ Message('note_off', note=60, time=160)  # delta = 4640 - 4480
 - [x] Can compose 8-bar melody with multiple tracks (via MCP tools)
 - [ ] Exported MIDI sounds correct in external DAW (MuseScore, Logic, etc.)
 
-**Achieved**: Complete MCP server with 14 tools (song, structure, track, note, utility), expression evaluation, MIDI export with General MIDI support, and 72 passing unit tests.
+**Achieved**: Complete MCP server with 14 tools (song, structure, track, note, utility), expression evaluation, MIDI export with General MIDI support, 71 passing unit tests, and comprehensive documentation.
 
 ---
 

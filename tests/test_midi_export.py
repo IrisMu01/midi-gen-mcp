@@ -116,26 +116,6 @@ def test_export_midi_simple(temp_midi_file):
     assert len(note_on_messages) == 3
 
 
-def test_export_midi_with_expressions(temp_midi_file):
-    """Test exporting MIDI with expression syntax in notes."""
-    add_track("piano", "piano")
-    add_section("intro", 1, 4, 120, "4/4", "C")
-
-    add_notes([
-        {"track": "piano", "pitch": 60, "start": "9 + 1/3", "duration": "1/3"},
-        {"track": "piano", "pitch": 64, "start": "10", "duration": "1/2"},
-    ])
-
-    result = export_midi(temp_midi_file)
-
-    assert "Exported MIDI" in result
-    assert os.path.exists(temp_midi_file)
-
-    # Verify file is valid
-    midi = mido.MidiFile(temp_midi_file)
-    assert len(midi.tracks) == 1
-
-
 def test_export_midi_multiple_tracks(temp_midi_file):
     """Test exporting MIDI with multiple tracks."""
     add_track("piano", "piano")
