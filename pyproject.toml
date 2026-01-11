@@ -10,6 +10,9 @@ dependencies = [
     "mido>=1.3.0",
 ]
 
+[project.scripts]
+midi-gen-mcp = "midi_gen_mcp.server:run"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
