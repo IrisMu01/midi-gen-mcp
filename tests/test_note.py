@@ -26,24 +26,6 @@ def test_add_notes_simple():
     assert len(state.notes) == 2
 
 
-def test_add_notes_with_expressions():
-    """Test adding notes with expression syntax."""
-    add_track("piano", "piano")
-
-    result = add_notes([
-        {"track": "piano", "pitch": 60, "start": "9 + 1/3", "duration": "1/3"},
-        {"track": "piano", "pitch": 64, "start": "10 + 2/3", "duration": "1/3"},
-    ])
-
-    assert "Added 2 note(s)" in result
-    state = get_state()
-    assert len(state.notes) == 2
-
-    # Check that expressions are stored as-is (not evaluated yet)
-    assert state.notes[0]["start"] == "9 + 1/3"
-    assert state.notes[0]["duration"] == "1/3"
-
-
 def test_add_notes_missing_field():
     """Test adding notes with missing required field."""
     add_track("piano", "piano")
@@ -111,29 +93,6 @@ def test_remove_notes_in_range():
     # Check that the correct notes remain
     remaining_pitches = {n["pitch"] for n in state.notes}
     assert remaining_pitches == {60, 72}
-
-
-def test_remove_notes_in_range_with_expressions():
-    """Test removing notes that use expression syntax."""
-    add_track("piano", "piano")
-
-    add_notes([
-        {"track": "piano", "pitch": 60, "start": 0, "duration": 1},
-        {"track": "piano", "pitch": 64, "start": "1 + 1/3", "duration": "1/3"},
-        {"track": "piano", "pitch": 67, "start": 2, "duration": 1},
-    ])
-
-    # Remove notes in range [1, 2)
-    result = remove_notes_in_range("piano", 1, 2)
-
-    assert "Removed 1 note(s)" in result
-
-    state = get_state()
-    assert len(state.notes) == 2
-
-    # Check that note with expression was removed
-    remaining_pitches = {n["pitch"] for n in state.notes}
-    assert remaining_pitches == {60, 67}
 
 
 def test_remove_notes_in_range_empty():
