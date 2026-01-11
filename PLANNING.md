@@ -40,21 +40,23 @@ midi-gen-mcp/
 ```python
 @dataclass
 class State:
-    song_info: dict  # {tempo: int, time_signature: str}
+    title: str       # Piece title (default: "Untitled")
     tracks: dict     # {track_name: {name: str, instrument: str}}
     notes: list      # [{track: str, pitch: int, start: str/float, duration: str/float}]
-    sections: list   # [{name: str, start_measure: int, end_measure: int, key: str, description: str}]
+    sections: list   # [{name, start_measure, end_measure, tempo, time_signature, key, description}]
     undo_stack: list # Max 10 state snapshots
     redo_stack: list # Cleared on new action
 ```
 
 ### Key Design Decisions:
 
-1. **Normalized structure**: Notes in flat list, not nested under tracks (optimized for range queries)
-2. **Key per section**: Allows modulation (key changes between sections)
-3. **No separate journal**: `sections[].description` serves both planning and execution notes
-4. **Expression support**: Note `start`/`duration` can be strings like `"9 + 1/3"` (evaluated to beats)
-5. **Beat-based timing**: Always in quarter notes (MIDI standard), time-signature agnostic
+1. **No global song_info**: Removed in favor of `title` field + per-section tempo/time_signature/key
+2. **Tempo/time_signature/key per section**: Allows for tempo changes, meter changes, and modulation
+3. **Normalized structure**: Notes in flat list, not nested under tracks (optimized for range queries)
+4. **No separate journal**: `sections[].description` serves both planning and execution notes
+5. **Expression support**: Note `start`/`duration` can be strings like `"9 + 1/3"` (evaluated to beats)
+6. **Beat-based timing**: Always in quarter notes (MIDI standard), time-signature agnostic
+7. **Neighbor adjustment**: Editing section boundaries automatically trims neighboring sections to prevent overlaps
 
 ### Example Note:
 ```python
@@ -72,6 +74,8 @@ class State:
   "name": "intro",
   "start_measure": 1,
   "end_measure": 4,
+  "tempo": 72,
+  "time_signature": "4/4",
   "key": "Dm",
   "description": "Sparse piano, melancholic. Dm9-G7alt progression, descending melody..."
 }
@@ -182,12 +186,12 @@ Message('note_off', note=60, time=160)  # delta = 4640 - 4480
 ## MCP Tools Overview
 
 ### Song Management
-- `create_song(tempo: int, time_signature: str)` - Initialize song
-- `get_song_info()` - Return tempo, time signature, total measures
+- `set_title(title: str)` - Set piece title
+- `get_piece_info()` - Return title, sections overview, tracks, note count
 
 ### Structure Management
-- `add_section(name: str, start_measure: int, end_measure: int, key: str, description: str)`
-- `edit_section(name: str, **kwargs)` - Update section fields
+- `add_section(name, start_measure, end_measure, tempo, time_signature, key, description)` - Add section
+- `edit_section(name: str, **kwargs)` - Update section fields (auto-adjusts neighbors to prevent overlaps)
 - `get_sections()` - Return all sections
 
 ### Track Management
@@ -209,59 +213,69 @@ Message('note_off', note=60, time=160)  # delta = 4640 - 4480
 
 ## Execution Plan
 
-### Task 1: Project Scaffolding
-- Set up Python project structure (pyproject.toml, src/, tests/)
-- Install dependencies: `mcp`, `mido`
-- Initialize git workflow on branch `claude/plan-mcp-server-cqlSM`
+### Task 1: Project Scaffolding ✅
+- [x] Set up Python project structure (pyproject.toml, src/, tests/)
+- [x] Install dependencies: `mcp`, `mido`, `pytest`
+- [x] Initialize git workflow on branch `claude/plan-mcp-server-cqlSM`
+- [x] Add requirements.txt and Makefile for easy setup
 
 ### Task 2: Core State & Server
-- Implement `state.py` with State dataclass and snapshot functions
-- Implement `server.py` with MCP server initialization (stdio transport)
-- Add basic tool registration skeleton
+- [x] Implement `state.py` with State dataclass and snapshot functions
+- [x] Implement undo/redo with 10-snapshot limit
+- [ ] Implement `server.py` with MCP server initialization (stdio transport)
+- [ ] Add basic tool registration skeleton
 
-### Task 3: Song & Structure Tools
-- Implement `tools/song.py` (create_song, get_song_info)
-- Implement `tools/structure.py` (add_section, edit_section, get_sections)
-- Wire to server and test
+### Task 3: Song & Structure Tools ✅
+- [x] Implement `tools/song.py` (set_title, get_piece_info)
+- [x] Implement `tools/structure.py` (add_section, edit_section, get_sections)
+- [x] Implement neighbor adjustment logic for section overlaps
+- [x] Write comprehensive unit tests (18 tests)
+- [ ] Wire to server and test
 
 ### Task 4: Track & Note Tools
-- Implement `tools/track.py` (add_track, remove_track, get_tracks)
-- Implement `tools/note.py` (add_notes, remove_notes_in_range, get_notes)
-- Support expression evaluation for note timing
+- [x] Implement `tools/track.py` (add_track, remove_track, get_tracks)
+- [x] Write unit tests for track operations (9 tests)
+- [ ] Implement `tools/note.py` (add_notes, remove_notes_in_range, get_notes)
+- [ ] Support expression evaluation for note timing
 
 ### Task 5: MIDI Export
-- Implement `midi_export.py` with expression eval and tick conversion
-- Handle note_on/note_off event generation and sorting
-- Support multi-track export with channels
-- Add General MIDI instrument mapping
+- [ ] Implement `midi_export.py` with expression eval and tick conversion
+- [ ] Handle note_on/note_off event generation and sorting
+- [ ] Support multi-track export with channels
+- [ ] Add General MIDI instrument mapping
 
 ### Task 6: Utility Tools
-- Implement `tools/utility.py` (undo, redo, export)
-- Enforce 10-snapshot limit in undo stack
-- Wire export to midi_export module
+- [x] Implement undo/redo in `state.py` (enforces 10-snapshot limit)
+- [ ] Implement `tools/utility.py` wrapper (undo, redo, export)
+- [ ] Wire export to midi_export module
 
 ### Task 7: Testing & Validation
-- Unit tests for state operations
-- Integration test: Create simple song via MCP tools
-- Export test MIDI and validate in external DAW
-- Test undo/redo stack behavior
+- [x] Unit tests for state operations (8 tests)
+- [x] Unit tests for song, structure, track tools (27 tests total)
+- [ ] Integration test: Create simple song via MCP tools
+- [ ] Export test MIDI and validate in external DAW
+- [x] Test undo/redo stack behavior
 
 ### Task 8: Documentation & Commit
-- Update README with setup instructions
-- Document tool schemas
-- Commit and push to `claude/plan-mcp-server-cqlSM`
+- [ ] Update README with setup instructions
+- [ ] Document tool schemas
+- [x] Commit and push regularly to `claude/plan-mcp-server-cqlSM`
+
+**Current Status**: 35/35 tests passing. State management, song, structure, and track tools complete.
 
 ---
 
 ## Success Criteria
 
-- ✅ MCP server runs via Claude Desktop
-- ✅ All tools execute without errors
-- ✅ Expression evaluation works (`"9 + 1/3"` → correct ticks)
-- ✅ MIDI export produces valid `.mid` files
-- ✅ Undo/redo limited to 10 actions, no memory leaks
-- ✅ Can compose 8-bar melody with multiple tracks
-- ✅ Exported MIDI sounds correct in external DAW (MuseScore, Logic, etc.)
+- [ ] MCP server runs via Claude Desktop
+- [x] All implemented tools execute without errors (song, structure, track)
+- [ ] Expression evaluation works (`"9 + 1/3"` → correct ticks)
+- [ ] MIDI export produces valid `.mid` files
+- [x] Undo/redo limited to 10 actions, no memory leaks
+- [ ] Can compose 8-bar melody with multiple tracks
+- [ ] Exported MIDI sounds correct in external DAW (MuseScore, Logic, etc.)
+
+**Achieved so far**: State management, undo/redo, song/structure/track tools with 35 passing unit tests.
 
 ---
 
