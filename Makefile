@@ -3,6 +3,9 @@
 install:
 	pip install -e ".[dev]"
 
+update:
+	pip install --upgrade --force-reinstall .
+
 test:
 	python -m pytest tests/ -v
 
