@@ -114,7 +114,7 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="get_piece_info",
             description="Get overview information about the current piece (title, sections, tracks, note count)",
-            inputSchema={}
+            inputSchema={"type": "object", "additionalProperties": "false"}
         ),
 
         # Structure Management
@@ -131,7 +131,7 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="get_sections",
             description="Get all sections in the piece",
-            inputSchema={}
+            inputSchema={"type": "object", "additionalProperties": "false"}
         ),
 
         # Track Management
@@ -148,7 +148,7 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="get_tracks",
             description="Get all tracks in the piece",
-            inputSchema={}
+            inputSchema={"type": "object", "additionalProperties": "false"}
         ),
 
         # Note Operations
@@ -172,12 +172,12 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="undo",
             description="Undo the last action (max 10 undo steps)",
-            inputSchema={}
+            inputSchema={"type": "object", "additionalProperties": "false"}
         ),
         Tool(
             name="redo",
             description="Redo the last undone action",
-            inputSchema={}
+            inputSchema={"type": "object", "additionalProperties": "false"}
         ),
         Tool(
             name="export_midi",
