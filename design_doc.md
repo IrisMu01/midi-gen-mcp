@@ -72,15 +72,15 @@ Frontend DAW (Electron + React)
 
 #### Song Management
 ```python
-create_song(tempo: int, time_signature: str, key: str)
-get_song_info() -> {tempo, time_sig, key, total_measures}
+set_title(title: str)
+get_piece_info() -> {title, num_sections, num_tracks, num_notes, sections[], tracks[]}
 ```
 
 #### Structure Management
 ```python
-add_section(name: str, start_measure: int, end_measure: int, description: str)
-edit_section(name: str, **kwargs)
-get_sections() -> List[{name, start, end, description}]
+add_section(name: str, start_measure: int, end_measure: int, tempo: int, time_signature: str, key: str, description: str)
+edit_section(name: str, **kwargs)  # Auto-adjusts neighbors to prevent overlaps
+get_sections() -> List[{name, start_measure, end_measure, tempo, time_signature, key, description}]
 ```
 
 #### Track Management
@@ -92,18 +92,10 @@ get_tracks() -> List[{name, instrument}]
 
 #### Note Operations (Core CRUD)
 ```python
-add_notes(notes: List[{track, pitch, start_time, duration}])
+add_notes(notes: List[{track, pitch, start, duration}])  # start/duration support expressions like "9 + 1/3"
 remove_notes_in_range(track: str, start_time: float, end_time: float)
 get_notes(track: str, start_time: float, end_time: float) -> List[notes]
 ```
-
-#### Journal (Explainability)
-```python
-update_journal(section: str, entry: str)
-get_journal(section: Optional[str]) -> str
-```
-
-**Note:** Users should be able to edit journal entries directly in the UI. Musical analysis is highly personal - what Claude generates may not resonate with the user's interpretation. User edits to the journal will be visible to Claude in subsequent tool calls.
 
 #### Utility
 ```python
@@ -114,9 +106,11 @@ export_midi(filepath: str)
 
 **Why low-level only:**
 - Keeps tools deterministic (no hidden creativity)
-- Makes compositional reasoning explicit
+- Makes compositional reasoning explicit (via section descriptions)
 - Enables debugging and iteration
 - Avoids "magic" operations like `harmonize_melody(style="jazz")`
+
+**Note:** There is no separate journal - section descriptions serve both planning and execution notes.
 
 ### 2. Skills (Music Theory Knowledge)
 
@@ -278,16 +272,17 @@ add_section("chorus1", 13, 20, "Key change to Eb, maximal density")
 - Only load relevant notes: `get_notes("all", measures=[5,12])` ≈ 3K tokens
 - Reduce context consumption by 90% when iterating
 
-#### 2. Composer's Journal
+#### 2. Section Descriptions
 ```python
-update_journal("verse1", "Dm9-G7alt-Cmaj9 progression, rootless voicings, 
-               strings double melody at octave for richness")
+add_section("verse1", 5, 12, 72, "4/4", "Dm",
+            "Dm9-G7alt-Cmaj9 progression, rootless voicings,
+             strings double melody at octave for richness")
 ```
 
 **Benefits:**
 - High-level understanding without reparsing note data (~50 tokens vs. 3000)
 - Enables style transfer: "Apply verse1 harmony approach to verse2"
-- Supports debugging: "Why did you use that chord?" → Check journal
+- Supports debugging: "Why did you use that chord?" → Check section description
 - Human-readable compositional reasoning
 
 #### 3. Selective Note Reading
@@ -296,13 +291,13 @@ update_journal("verse1", "Dm9-G7alt-Cmaj9 progression, rootless voicings,
 get_notes("all", measures=[1, 32])  # 48K tokens
 
 # Load only what's needed
-get_song_structure()              # Sections + journals: ~500 tokens
+get_piece_info()                  # Sections overview: ~500 tokens
 get_notes("piano", measures=[5,8]) # Specific section: ~1K tokens
 ```
 
 **Iteration Cost Per Section:**
 - Read section notes: ~3K tokens
-- Update journal: ~50 tokens
+- Update section description: ~50 tokens
 - Rewrite section: ~3.6K tokens
 - **Total: ~6.7K tokens** (vs. 56K for full song)
 
@@ -321,11 +316,11 @@ Claude reasoning:
 4. Choose key: D minor (comfortable range, not too dark)
 
 Tool calls:
-- create_song(tempo=72, time_signature="4/4", key="Dm")
-- add_section("intro", 1, 4, "Sparse piano, melancholic mood setting")
-- add_section("verse", 5, 12, "Piano + strings, main theme")
-- add_track("piano")
-- add_track("strings")
+- set_title("Melancholic Jazz Ballad")
+- add_section("intro", 1, 4, 72, "4/4", "Dm", "Sparse piano, melancholic mood setting")
+- add_section("verse", 5, 12, 72, "4/4", "Dm", "Piano + strings, main theme")
+- add_track("piano", "acoustic grand piano")
+- add_track("strings", "string ensemble")
 ```
 
 ### Phase 2: Execution (Section-by-Section)
@@ -340,32 +335,31 @@ Claude reasoning for intro:
 
 Tool calls:
 - add_notes([
-    {"track": "piano", "pitch": 38, "start": 0.0, "duration": 2.0},  # D2 bass
-    {"track": "piano", "pitch": 53, "start": 0.0, "duration": 2.0},  # F3
-    {"track": "piano", "pitch": 60, "start": 0.0, "duration": 2.0},  # C4
-    {"track": "piano", "pitch": 62, "start": 0.0, "duration": 2.0},  # D4 (9th)
-    {"track": "piano", "pitch": 74, "start": 0.0, "duration": 0.5},  # D5 melody
+    {"track": "piano", "pitch": 38, "start": 0, "duration": 2},  # D2 bass
+    {"track": "piano", "pitch": 53, "start": 0, "duration": 2},  # F3
+    {"track": "piano", "pitch": 60, "start": 0, "duration": 2},  # C4
+    {"track": "piano", "pitch": 62, "start": 0, "duration": 2},  # D4 (9th)
+    {"track": "piano", "pitch": 74, "start": 0, "duration": "1/2"},  # D5 melody
     # ... more notes
   ])
-- update_journal("intro", "Dm9-G7alt-Cmaj7-A7alt, descending melody D→A, 
-                 rootless voicings for open jazz sound, rubato feel")
 ```
+
+**Note:** The section's description field documents the musical decisions: "Sparse piano, melancholic mood setting. Dm9-G7alt-Cmaj7-A7alt, descending melody D→A, rootless voicings for open jazz sound."
 
 ### Phase 3: Iteration (Refinement)
 ```
 User: "The intro feels too dense"
 
 Claude reasoning:
-1. Read intro journal: "rootless voicings for open jazz sound"
-2. Read intro notes: analyze density
-3. Identify issue: 5-note voicings too thick
-4. Solution: Simplify to 3-note voicings, more space between notes
+1. Read intro section and notes
+2. Identify issue: 5-note voicings too thick
+3. Solution: Simplify to 3-note voicings, more space between notes
 
 Tool calls:
-- remove_notes_in_range("piano", 0.0, 8.0)
+- remove_notes_in_range("piano", 0.0, 16.0)  # 4 measures in 4/4 = 16 beats
 - add_notes([simplified voicings])
-- update_journal("intro", "Revised to 3-note voicings for clarity, 
-                 added more rhythmic space")
+- edit_section("intro", description="Sparse piano, melancholic. Revised to 3-note voicings,
+               added rhythmic space. Dm9-G7alt-Cmaj7-A7alt progression.")
 ```
 
 ---
@@ -429,7 +423,7 @@ Tool calls:
 
 **Tasks:**
 1. Scaffold MCP server with Python + mcp SDK
-2. Implement basic tools: `create_song`, `add_notes`, `get_notes`, `update_journal`
+2. Implement basic tools: `set_title`, `add_section`, `add_track`, `add_notes`, `get_notes`
 3. Create initial skills: basic harmony, melody principles
 4. Configure Claude Desktop to use MCP server
 5. Test: "Write a simple 8-bar melody with basic harmony"
@@ -438,14 +432,14 @@ Tool calls:
 **Success Criteria:**
 - Tool calls execute without errors
 - Generated MIDI sounds musically coherent
-- Journal entries show reasonable compositional reasoning
+- Section descriptions show reasonable compositional reasoning
 
 ### Phase 2: Complete MCP Tools + Core Skills (3-5 days)
 **Goal:** Full CRUD operations and comprehensive music theory knowledge
 
 **Tasks:**
-1. Implement remaining tools: sections, tracks, remove_notes, undo/redo, export
-2. Add batch operations: `add_notes` accepts arrays
+1. Implement remaining tools: edit_section, remove_notes, undo/redo, export_midi
+2. Add batch operations: `add_notes` accepts arrays with expression support
 3. Build skills library:
    - Core theory: intervals, chords, voice leading, progressions
    - Genres: Baroque, Classical, Romantic, Jazz
@@ -455,7 +449,7 @@ Tool calls:
 
 **Success Criteria:**
 - Can compose 4000-note piece within context limits
-- Journal enables understanding of compositional decisions
+- Section descriptions enable understanding of compositional decisions
 - Skills guide Claude to genre-appropriate, musically sensible outputs
 
 ### Phase 3: Minimal Frontend (3-5 days)
@@ -495,7 +489,7 @@ Tool calls:
 - Expand skills based on observed gaps or mistakes
 - Optimize context window usage if hitting limits
 - Add undo history visualization
-- Improve journal searchability
+- Improve section description searchability and editing
 
 ---
 
@@ -542,7 +536,7 @@ Tool calls:
 ### Context Window Usage
 - Skills: ~10K tokens (loaded once per session)
 - System prompts: ~5K tokens
-- Song structure + journals: ~2K tokens
+- Song structure + section descriptions: ~2K tokens
 - Active section notes: ~3K tokens
 - Conversation history: ~20K tokens
 - **Total active context: ~40K tokens (20% of 200K limit)**
@@ -560,7 +554,7 @@ Tool calls:
 
 ### Subjective (Human Evaluation)
 - Does the music sound coherent and musical?
-- Can users understand compositional decisions via journal?
+- Can users understand compositional decisions via section descriptions?
 - Is iteration workflow intuitive and effective?
 - Does manual editing + AI generation feel collaborative?
 
@@ -618,7 +612,7 @@ Tool calls:
 1. Will explicit music theory reasoning produce more musical outputs than learned implicit patterns?
 2. Can LLMs maintain stylistic coherence across 80+ tool calls without "forgetting" earlier decisions?
 3. What's the minimum skill documentation needed for acceptable quality?
-4. Should journal be user-editable (e.g., user corrects Claude's musical analysis)?
+4. Should section descriptions be user-editable in the UI (e.g., user corrects Claude's musical analysis)?
 5. How to handle complex orchestration decisions spanning multiple tracks simultaneously?
 
 ---
@@ -628,9 +622,10 @@ Tool calls:
 This design proposes an alternative to end-to-end tokenized MIDI generation by separating creative reasoning (LLM + skills) from deterministic operations (MCP tools). The approach prioritizes explainability, editability, and control, with the hypothesis that explicit music theory reasoning may produce more musically coherent outputs than learned implicit patterns.
 
 Key innovations:
-- **Composer's journal** for transparent decision-making
+- **Section descriptions** for transparent decision-making
 - **Section-based organization** for context efficiency
 - **Low-level CRUD tools** to keep creativity in the LLM
 - **Comprehensive skills** teaching principles over formulas
+- **Expression support** for note timing (e.g., "9 + 1/3") to minimize quantization errors
 
 Success depends on whether LLM reasoning + music theory knowledge can match or exceed the musical quality of models trained on millions of examples. The prototype will test this hypothesis with manageable risk and cost.
