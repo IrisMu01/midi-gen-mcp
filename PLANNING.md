@@ -1,294 +1,445 @@
-# MCP Server Planning Summary
+# Planning Document
 
-## Context
-
-This repo implements **Core Component #1: MCP Server** from `design_doc.md`. The MCP server exposes low-level CRUD operations for MIDI generation, keeping all creative reasoning in the LLM (Claude Sonnet 4.5).
-
-**Key Principle**: MCP tools are deterministic operations only. All music theory and composition happens in Claude through skills.
+This file is for planning future implementation changes and features.
 
 ---
 
-## MCP Server Structure
+## Current Status
 
-```
-midi-gen-mcp/
-├── src/
-│   └── midi_gen_mcp/
-│       ├── __init__.py
-│       ├── server.py          # Main MCP server entry point
-│       ├── state.py           # In-memory state management
-│       ├── tools/             # Tool implementations (one file per category)
-│       │   ├── __init__.py
-│       │   ├── song.py        # create_song, get_song_info
-│       │   ├── structure.py   # add_section, edit_section, get_sections
-│       │   ├── track.py       # add_track, remove_track, get_tracks
-│       │   ├── note.py        # add_notes, remove_notes_in_range, get_notes
-│       │   └── utility.py     # undo_last_action, redo_last_action, export_midi
-│       └── midi_export.py     # MIDI file generation (using mido)
-├── tests/
-│   └── test_*.py
-├── pyproject.toml
-├── README.md
-├── design_doc.md
-└── PLANNING.md (this file)
-```
+The MCP server implementation is complete with all core features:
+- 14 MCP tools across 5 categories (song, structure, track, note, utility)
+- Expression evaluation for note timing (e.g., "9 + 1/3")
+- MIDI export with General MIDI instrument mapping
+- Undo/redo with 10-snapshot limit
+- 71 passing unit tests
+
+See `design_doc.md` for full architecture and `README.md` for usage.
 
 ---
 
-## State Schema (Normalized)
+## Planned Feature: Explicit Chord Progression Tracking + Self-Correction
 
+### Motivation
+
+Current observations from testing:
+1. Claude plans chord progressions in section descriptions but executes differently (planned F6/9, wrote Cadd11)
+2. Harmony details buried in free-form text → LLM doesn't consistently reference them
+3. No verification mechanism to catch melody-harmony conflicts
+
+### Solution: First-Class Harmony State + Validation Tools
+
+Make chord progression a **tracked, queryable data structure** with **self-correction workflow**.
+
+---
+
+## Implementation Plan
+
+### Task 1: Extend State Schema
+
+**File:** `src/midi_gen_mcp/state.py`
+
+**Changes:**
 ```python
 @dataclass
 class State:
-    title: str       # Piece title (default: "Untitled")
-    tracks: dict     # {track_name: {name: str, instrument: str}}
-    notes: list      # [{track: str, pitch: int, start: str/float, duration: str/float}]
-    sections: list   # [{name, start_measure, end_measure, tempo, time_signature, key, description}]
-    undo_stack: list # Max 10 state snapshots
-    redo_stack: list # Cleared on new action
+    title: str
+    tracks: dict[str, dict[str, Any]]
+    notes: list[dict[str, Any]]  # NEW: notes can have optional "flagged": bool field
+    sections: list[dict[str, Any]]
+    chord_progression: list[dict[str, Any]]  # NEW: [{beat, chord, duration, chord_tones}]
+    undo_stack: list[dict[str, Any]]
+    redo_stack: list[dict[str, Any]]
 ```
 
-### Key Design Decisions:
+**Update:**
+- `snapshot_state()` to include `chord_progression`
+- `restore_state()` to restore `chord_progression`
 
-1. **No global song_info**: Removed in favor of `title` field + per-section tempo/time_signature/key
-2. **Tempo/time_signature/key per section**: Allows for tempo changes, meter changes, and modulation
-3. **Normalized structure**: Notes in flat list, not nested under tracks (optimized for range queries)
-4. **No separate journal**: `sections[].description` serves both planning and execution notes
-5. **Expression support**: Note `start`/`duration` can be strings like `"9 + 1/3"` (evaluated to beats)
-6. **Beat-based timing**: Always in quarter notes (MIDI standard), time-signature agnostic
-7. **Neighbor adjustment**: Editing section boundaries automatically trims neighboring sections to prevent overlaps
+---
 
-### Example Note:
+### Task 2: Chord Parser Module
+
+**New File:** `src/midi_gen_mcp/chord_parser.py`
+
+**Purpose:** Wrapper around `pychord` library with error handling
+
+**Key Functions:**
 ```python
-{
-  "track": "piano",
-  "pitch": 60,           # Middle C
-  "start": "9 + 1/3",    # Beats (quarter notes) - supports expressions
-  "duration": "1/3"      # Triplet eighth note
-}
+def parse_chord_symbol(symbol: str) -> dict:
+    """
+    Parse chord symbol and return chord tones.
+
+    Args:
+        symbol: Chord symbol string (e.g., "Cm7", "G7", "Fmaj9")
+
+    Returns:
+        {
+            "chord": str,           # Original symbol
+            "chord_tones": List[str]  # Pitch classes ["C", "E", "G", "Bb"]
+        }
+
+    Raises:
+        ValueError: If chord symbol not recognized by pychord
+    """
+
+def get_supported_qualities() -> List[str]:
+    """Return list of supported chord qualities for error messages."""
 ```
 
-### Example Section:
+**Dependencies:** Add `pychord` to `pyproject.toml`
+
+**Error Handling:**
+- If chord symbol not recognized, raise `ValueError` with:
+  - Invalid symbol
+  - List of supported qualities (from pychord constants)
+  - Examples: ["C", "Cm", "C7", "Cmaj7", "Cdim", "Caug", "Csus4", "C9", "C13"]
+
+**Enharmonics:** Use whatever pychord returns (C# vs Db), document this behavior
+
+---
+
+### Task 3: Harmony Tools
+
+**New File:** `src/midi_gen_mcp/tools/harmony.py`
+
+**Tools (3 total):**
+
+#### 1. `add_chords`
 ```python
-{
-  "name": "intro",
-  "start_measure": 1,
-  "end_measure": 4,
-  "tempo": 72,
-  "time_signature": "4/4",
-  "key": "Dm",
-  "description": "Sparse piano, melancholic. Dm9-G7alt progression, descending melody..."
-}
+def add_chords(chords: List[dict]) -> dict:
+    """
+    Add chord progression to the piece.
+
+    Args:
+        chords: List of {beat: float, chord: str, duration: float}
+
+    Returns:
+        {
+            "success": bool,
+            "chords_added": List[{beat, chord, duration, chord_tones}],
+            "errors": List[{invalid_chord, error, supported_qualities}] (if any)
+        }
+
+    Behavior:
+        - Validates each chord symbol using chord_parser
+        - If all valid: adds to state.chord_progression, returns success
+        - If any invalid: returns error with helpful message, state unchanged
+    """
+```
+
+#### 2. `get_chords_in_range`
+```python
+def get_chords_in_range(start_beat: float, end_beat: float) -> List[dict]:
+    """
+    Get all chords in a beat range.
+
+    Returns: List[{beat, chord, duration, chord_tones}]
+    """
+```
+
+#### 3. `remove_chords_in_range`
+```python
+def remove_chords_in_range(start_beat: float, end_beat: float) -> str:
+    """
+    Remove chords in a beat range.
+
+    Side effects:
+        - Clears ALL flagged notes (harmony context is now stale)
+
+    Returns: Confirmation message
+    """
 ```
 
 ---
 
-## Libraries & Dependencies
+### Task 4: Validation Tools
 
-| Library | Purpose | Usage |
-|---------|---------|-------|
-| **`mcp`** | MCP server framework | Tool registration, stdio transport, schema generation |
-| **`mido`** | MIDI file I/O | Export to `.mid` files (note_on/note_off events) |
-| **`pydantic`** | Data validation | Tool parameter validation (included with `mcp`) |
-| **`json`** (stdlib) | State persistence | Optional save/load session |
-| **`copy`** (stdlib) | Deep copying | Undo/redo state snapshots |
-| **`dataclasses`** (stdlib) | Data structures | Internal state objects |
+**New File:** `src/midi_gen_mcp/tools/validation.py`
 
----
+**Tools (2 total):**
 
-## Key Algorithms
-
-### 1. Undo/Redo (State Snapshots)
-
-**Memory limit**: Max 10 undo actions
-
+#### 1. `flag_notes`
 ```python
-def before_mutation():
-    """Call before ANY mutating operation"""
-    state.undo_stack.append(snapshot_state())
+def flag_notes(tracks: List[str], start_beat: float, end_beat: float) -> int:
+    """
+    Flag notes that fall outside the planned chord progression.
 
-    # Limit to 10 snapshots
-    if len(state.undo_stack) > 10:
-        state.undo_stack.pop(0)  # Remove oldest
+    Args:
+        tracks: Which tracks to check (e.g., ["piano", "bass"])
+        start_beat, end_beat: Beat range
 
-    state.redo_stack.clear()  # New action invalidates redo
+    Returns:
+        Number of notes flagged
 
-def undo_last_action():
-    if not state.undo_stack:
-        return "Nothing to undo"
+    Behavior:
+        - Auto-clears ALL previous flags first
+        - For each note in range:
+          - Find active chord at note's start beat
+          - Check if note's pitch is in chord_tones
+          - If not, set note["flagged"] = True
+        - Returns count of flagged notes
 
-    state.redo_stack.append(snapshot_state())
-    previous = state.undo_stack.pop()
-    restore_state(previous)
-    return "Undone"
-
-def redo_last_action():
-    if not state.redo_stack:
-        return "Nothing to redo"
-
-    state.undo_stack.append(snapshot_state())
-    next_state = state.redo_stack.pop()
-    restore_state(next_state)
-    return "Redone"
+    Error handling:
+        - If no chord_progression defined: return error
+        - If note's beat has no active chord: flag it (missing harmony)
+    """
 ```
 
-**Memory cost**: ~400KB/snapshot × 10 = ~4MB (acceptable)
-
----
-
-### 2. MIDI Export
-
-**Process**:
-1. Evaluate expressions (`"9 + 1/3"` → `9.333...`) and convert to absolute ticks
-2. Create note_on/note_off events with absolute tick times
-3. Sort events by tick (note_off after note_on if same tick)
-4. Convert to delta times (relative to previous event)
-5. Write MIDI file with one track per instrument
-
-**Key constants**:
-- `TICKS_PER_BEAT = 480` (standard resolution)
-- Fixed velocity = 64 (medium, no dynamics for prototype)
-- One MIDI track per instrument (channels 0-15)
-
-**MIDI message structure**:
+#### 2. `remove_flagged_notes`
 ```python
-Message('note_on',
-        note=60,        # MIDI note number (0-127)
-        velocity=64,    # How hard struck (0-127)
-        channel=0,      # Instrument channel (0-15)
-        time=160)       # Delta time in ticks since last event
-```
+def remove_flagged_notes() -> List[dict]:
+    """
+    Remove all flagged notes from state.
 
-**Example conversion**:
-```python
-# Input note
-{"pitch": 60, "start": "9 + 1/3", "duration": "1/3"}
+    Returns:
+        List of removed notes (using standard note schema)
+        [{track, pitch, start, duration}]
 
-# Step 1: Evaluate and convert to ticks
-start_beats = 9.333...
-start_ticks = int(9.333... × 480) = 4480 ticks
-duration_ticks = int(0.333... × 480) = 160 ticks
-end_ticks = 4480 + 160 = 4640 ticks
-
-# Step 2: Create events
-events = [
-  {'type': 'note_on', 'note': 60, 'tick': 4480},
-  {'type': 'note_off', 'note': 60, 'tick': 4640}
-]
-
-# Step 3: Sort and compute deltas (if prev event at tick 4000)
-Message('note_on', note=60, time=480)   # delta = 4480 - 4000
-Message('note_off', note=60, time=160)  # delta = 4640 - 4480
+    Side effects:
+        - Removes notes where flagged=True
+        - No need to clear flagged field (notes are deleted)
+    """
 ```
 
 ---
 
-## MCP Tools Overview
+### Task 5: Tool Registration
 
-### Song Management
-- `set_title(title: str)` - Set piece title
-- `get_piece_info()` - Return title, sections overview, tracks, note count
+**File:** `src/midi_gen_mcp/server.py`
 
-### Structure Management
-- `add_section(name, start_measure, end_measure, tempo, time_signature, key, description)` - Add section
-- `edit_section(name: str, **kwargs)` - Update section fields (auto-adjusts neighbors to prevent overlaps)
-- `get_sections()` - Return all sections
+**Register 5 new tools:**
+- `add_chords` (harmony.py)
+- `get_chords_in_range` (harmony.py)
+- `remove_chords_in_range` (harmony.py)
+- `flag_notes` (validation.py)
+- `remove_flagged_notes` (validation.py)
 
-### Track Management
-- `add_track(name: str, instrument: str)` - Create track
-- `remove_track(name: str)` - Delete track and its notes
-- `get_tracks()` - Return all tracks
-
-### Note Operations (Core CRUD)
-- `add_notes(notes: List[dict])` - Batch add notes
-- `remove_notes_in_range(track: str, start_time: float, end_time: float)` - Delete notes in time range
-- `get_notes(track: str, start_time: float, end_time: float)` - Query notes (supports expressions)
-
-### Utility
-- `undo_last_action()` - Restore previous state
-- `redo_last_action()` - Restore undone state
-- `export_midi(filepath: str)` - Generate `.mid` file
+**Total tool count:** 14 → 19 tools
 
 ---
 
-## Execution Plan
+### Task 6: Tests
 
-### Task 1: Project Scaffolding ✅
-- [x] Set up Python project structure (pyproject.toml, src/, tests/)
-- [x] Install dependencies: `mcp`, `mido`, `pytest`
-- [x] Initialize git workflow on branch `claude/plan-mcp-server-cqlSM`
-- [x] Add requirements.txt and Makefile for easy setup
+**New Files:**
+- `tests/test_chord_parser.py` (15 tests)
+- `tests/test_harmony_tools.py` (20 tests)
+- `tests/test_validation_tools.py` (15 tests)
 
-### Task 2: Core State & Server ✅
-- [x] Implement `state.py` with State dataclass and snapshot functions
-- [x] Implement undo/redo with 10-snapshot limit
-- [x] Implement `server.py` with MCP server initialization (stdio transport)
-- [x] Add complete tool registration for all 14 tools
+**Coverage:**
 
-### Task 3: Song & Structure Tools ✅
-- [x] Implement `tools/song.py` (set_title, get_piece_info)
-- [x] Implement `tools/structure.py` (add_section, edit_section, get_sections)
-- [x] Implement neighbor adjustment logic for section overlaps
-- [x] Write comprehensive unit tests (18 tests)
-- [x] Wire to server and test
+#### Chord Parser Tests (15)
+- Valid chord symbols (major, minor, 7th, maj7, dim, aug, sus, 9, 11, 13, add9)
+- Invalid chord symbols (error handling)
+- Enharmonic equivalents (C# vs Db)
+- Edge cases (empty string, special characters)
 
-### Task 4: Track & Note Tools ✅
-- [x] Implement `tools/track.py` (add_track, remove_track, get_tracks)
-- [x] Write unit tests for track operations (9 tests)
-- [x] Implement `tools/note.py` (add_notes, remove_notes_in_range, get_notes)
-- [x] Support expression evaluation for note timing
-- [x] Write comprehensive unit tests for note operations (17 tests)
+#### Harmony Tools Tests (20)
+- `add_chords`: valid symbols, invalid symbols, batch operations
+- `add_chords`: overlapping chord ranges (later takes precedence)
+- `get_chords_in_range`: normal range, empty range, partial overlap
+- `remove_chords_in_range`: removes chords, clears flags
+- Undo/redo with chord operations
 
-### Task 5: MIDI Export ✅
-- [x] Implement `midi_export.py` with expression eval and tick conversion
-- [x] Handle note_on/note_off event generation and sorting
-- [x] Support multi-track export with channels
-- [x] Add General MIDI instrument mapping (128 instruments)
-- [x] Write comprehensive unit tests for MIDI export (20 tests)
+#### Validation Tools Tests (15)
+- `flag_notes`: notes in chord (not flagged)
+- `flag_notes`: notes outside chord (flagged)
+- `flag_notes`: multiple tracks
+- `flag_notes`: auto-clears previous flags
+- `flag_notes`: error when no chord progression
+- `remove_flagged_notes`: returns correct schema
+- `remove_flagged_notes`: only removes flagged notes
+- Integration: flag → remove → add → verify
 
-### Task 6: Utility Tools ✅
-- [x] Implement undo/redo in `state.py` (enforces 10-snapshot limit)
-- [x] Implement `tools/utility.py` wrapper (undo, redo, export)
-- [x] Wire export to midi_export module
+**Target:** All 101 tests passing (71 existing + 30 new)
 
-### Task 7: Testing & Validation ✅
-- [x] Unit tests for state operations (8 tests)
-- [x] Unit tests for song, structure, track tools (27 tests total)
-- [x] Unit tests for note operations (17 tests)
-- [x] Unit tests for MIDI export (19 tests - removed redundant test)
-- [x] Test undo/redo stack behavior
-- [x] All 71 tests passing
+---
 
-### Task 8: Documentation & Commit ✅
-- [x] Update README with comprehensive setup instructions
-- [x] Document all 14 tool schemas with examples
-- [x] Add General MIDI instrument mapping reference
-- [x] Document expression syntax and state schema
-- [x] Commit and push regularly to `claude/implement-tasks-1-5-midi-5BHow`
+### Task 7: Documentation
 
-**Current Status**: **71/71 tests passing**. Core MCP server implementation complete with all tools (song, structure, track, note, utility) and full MIDI export functionality. Comprehensive README documentation added.
+#### Update README.md
+- Add "Harmony Tools" section with examples
+- Add "Validation Tools" section with self-correction workflow
+- Document supported chord symbols (link to pychord)
+- Add example: melody → chords → harmonize → validate → fix
+
+#### Update design_doc.md
+- Add harmony tools to tool categories
+- Update compositional workflow (add chord planning phase)
+- Update context window estimates (chord progression ~500 tokens)
+
+#### Create Skill: `how-to-harmonize-melody.md`
+
+**File:** `skills/harmony/how-to-harmonize-melody.md`
+
+**Important Points for Skill Writer:**
+
+1. **Step-by-step workflow** (not prescriptive formulas):
+   - Step 1: Read melody with `get_notes(track, start, end)`
+   - Step 2: Analyze melody notes (identify downbeats, long notes, phrase endings)
+   - Step 3: Group melody into phrases (2-4 bars typically)
+   - Step 4: Choose chords where melody notes are chord tones
+   - Step 5: Use `add_chords` to plan progression (see chord_tones immediately)
+   - Step 6: Verify melody fits with `flag_notes([melody_track], start, end)`
+   - Step 7: If notes flagged, check which notes conflict with `get_notes`
+   - Step 8: Fix conflicts: `remove_flagged_notes()` then `add_notes` with corrections
+   - Step 9: Add harmony parts (bass, chords) using chord_tones as guide
+
+2. **Emphasize principles over rules:**
+   - "Melody notes on strong beats should typically be chord tones or extensions"
+   - "Passing tones (short duration, weak beats) can be non-harmonic"
+   - "Neighbor tones and chromatic approach notes are common exceptions"
+   - Don't say: "Always use I-IV-V-I"
+
+3. **Multiple approaches:**
+   - Ballad style: melody → harmony (use these new tools)
+   - Jazz style: harmony → melody (plan chords first, write melody to fit)
+   - Both are valid, explain trade-offs
+
+4. **Tool usage examples:**
+   ```markdown
+   Example: Harmonizing a 4-bar melody in C major
+
+   1. Read melody:
+      get_notes("melody", 0, 16)
+
+   2. Analyze: Melody has C (beat 0), E (beat 4), G (beat 8), C (beat 12)
+
+   3. Plan chords where melody notes are chord tones:
+      add_chords([
+        {"beat": 0, "chord": "C", "duration": 4},    # Melody C is root
+        {"beat": 4, "chord": "C", "duration": 4},    # Melody E is 3rd
+        {"beat": 8, "chord": "C", "duration": 4},    # Melody G is 5th
+        {"beat": 12, "chord": "F", "duration": 4}    # Melody C is 5th of F
+      ])
+
+   4. Verify:
+      flag_notes(["melody"], 0, 16)
+      # Returns: 0 (all notes fit)
+
+   5. Add bass line using chord_tones:
+      # From add_chords response: C has ["C", "E", "G"]
+      add_notes([
+        {"track": "bass", "pitch": 48, "start": 0, "duration": 4},  # C
+        {"track": "bass", "pitch": 48, "start": 4, "duration": 4},  # C
+        # ...
+      ])
+   ```
+
+5. **Common mistakes to avoid:**
+   - Don't write harmony before planning chords (use `add_chords` first!)
+   - Don't ignore `flag_notes` results (if notes flagged, investigate why)
+   - Don't use overly complex chord symbols pychord won't recognize
+   - Simplify jazz alterations (use "G7" instead of "G7#9b13", add tensions manually if needed)
+
+6. **When to use validation:**
+   - Always after adding melody before harmonizing
+   - After adding harmony to catch voicing mistakes
+   - Don't flag melody tracks with intentional chromatic passing tones
+
+---
+
+### Task 8: Edge Cases & Design Decisions
+
+#### Chord Overlap Behavior
+```python
+add_chords([
+    {"beat": 0, "chord": "C7", "duration": 8},
+    {"beat": 4, "chord": "F7", "duration": 4}  # Overlaps beats 4-8
+])
+```
+**Decision:** Allow overlap, later chord takes precedence (overwrite, don't error)
+
+#### Missing Chord at Beat
+```python
+# Chords: C7 at beat 0-4, G7 at beat 8-12
+# Note at beat 6 (gap!)
+flag_notes(["melody"], 0, 16)
+```
+**Decision:** Flag notes in gaps (missing harmony is an error)
+
+#### Enharmonic Normalization
+**Decision:** Use pychord's default (no custom enharmonic logic). Document that C# and Db are distinct.
+
+#### Multiple Tracks in `flag_notes`
+```python
+flag_notes(["melody", "piano", "bass"], 0, 16)
+```
+**Decision:** Flag notes across all specified tracks (useful for checking full arrangement)
+
+---
+
+### Task 9: Integration Testing
+
+**Manual Test Scenarios:**
+
+1. **Happy Path: Melody → Harmony**
+   - Add melody
+   - Plan chords with `add_chords`
+   - Verify with `flag_notes` (expect 0)
+   - Add harmony notes
+
+2. **Self-Correction Path:**
+   - Add melody with intentional wrong note
+   - Plan chords
+   - Flag notes (expect >0)
+   - Remove flagged notes
+   - Add corrected notes
+   - Re-flag (expect 0)
+
+3. **Chord Change Invalidates Flags:**
+   - Add melody
+   - Plan chords (Cm7)
+   - Flag notes (some flagged)
+   - Change chord to C7
+   - Verify flags were auto-cleared
+
+4. **Undo/Redo with Chords:**
+   - Add chords
+   - Add notes
+   - Flag notes
+   - Undo (chords removed, flags cleared)
+   - Redo (chords restored)
+
+---
+
+### Task 10: Migration Path
+
+**Backwards Compatibility:**
+- Existing compositions have no chord_progression → empty list
+- Existing tools (add_notes, etc.) work unchanged
+- New tools are optional (old workflow still valid)
+
+**No Breaking Changes:**
+- State schema only adds fields, doesn't modify existing ones
+- Undo/redo snapshots include new fields (old snapshots compatible via default values)
 
 ---
 
 ## Success Criteria
 
-- [ ] MCP server runs via Claude Desktop (ready for testing)
-- [x] All implemented tools execute without errors (all 14 tools)
-- [x] Expression evaluation works (`"9 + 1/3"` → correct ticks)
-- [x] MIDI export produces valid `.mid` files
-- [x] Undo/redo limited to 10 actions, no memory leaks
-- [x] Can compose 8-bar melody with multiple tracks (via MCP tools)
-- [ ] Exported MIDI sounds correct in external DAW (MuseScore, Logic, etc.)
-
-**Achieved**: Complete MCP server with 14 tools (song, structure, track, note, utility), expression evaluation, MIDI export with General MIDI support, 71 passing unit tests, and comprehensive documentation.
+- [ ] All 101 tests passing (71 existing + 30 new)
+- [ ] pychord dependency installed and working
+- [ ] Invalid chord symbols return helpful error messages
+- [ ] `flag_notes` correctly identifies non-harmonic notes
+- [ ] Self-correction workflow (flag → remove → fix) works end-to-end
+- [ ] Undo/redo preserves chord_progression state
+- [ ] Skill documentation teaches workflow without being prescriptive
+- [ ] README examples demonstrate typical usage
 
 ---
 
-## Next Steps
+## Future Enhancements (Not in Scope)
 
-Once MCP server is complete and validated:
-1. **Phase 2**: Create music theory skills (harmony, melody, rhythm, genres)
-2. **Phase 3**: Build minimal frontend (Electron + React chat interface)
-3. **Phase 4**: Add piano roll visualization and manual editing
+- Jazz chord extensions (alt, #9, b13) via manual parser
+- Chord symbol suggestions when invalid symbol provided
+- Auto-suggest chord progression based on melody
+- Visualize chord progression in frontend (chord chart above piano roll)
+- Strictness levels for `flag_notes` (allow passing tones, neighbor tones)
 
-Current focus: **MCP server only** (this repo scope)
+---
+
+## Notes
+
+Current focus: **Explicit chord tracking + self-correction workflow** to address observed LLM harmonization errors.
+
+Principle: Keep tools deterministic. Chord parsing is deterministic (pychord). Validation is deterministic (note in chord_tones or not). Creative decisions (which chords, which voicings) stay in LLM + skills.
