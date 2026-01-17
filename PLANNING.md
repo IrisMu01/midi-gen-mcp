@@ -267,75 +267,6 @@ def remove_flagged_notes() -> List[dict]:
 - Update compositional workflow (add chord planning phase)
 - Update context window estimates (chord progression ~500 tokens)
 
-#### Create Skill: `how-to-harmonize-melody.md`
-
-**File:** `skills/harmony/how-to-harmonize-melody.md`
-
-**Important Points for Skill Writer:**
-
-1. **Step-by-step workflow** (not prescriptive formulas):
-   - Step 1: Read melody with `get_notes(track, start, end)`
-   - Step 2: Analyze melody notes (identify downbeats, long notes, phrase endings)
-   - Step 3: Group melody into phrases (2-4 bars typically)
-   - Step 4: Choose chords where melody notes are chord tones
-   - Step 5: Use `add_chords` to plan progression (see chord_tones immediately)
-   - Step 6: Verify melody fits with `flag_notes([melody_track], start, end)`
-   - Step 7: If notes flagged, check which notes conflict with `get_notes`
-   - Step 8: Fix conflicts: `remove_flagged_notes()` then `add_notes` with corrections
-   - Step 9: Add harmony parts (bass, chords) using chord_tones as guide
-
-2. **Emphasize principles over rules:**
-   - "Melody notes on strong beats should typically be chord tones or extensions"
-   - "Passing tones (short duration, weak beats) can be non-harmonic"
-   - "Neighbor tones and chromatic approach notes are common exceptions"
-   - Don't say: "Always use I-IV-V-I"
-
-3. **Multiple approaches:**
-   - Ballad style: melody → harmony (use these new tools)
-   - Jazz style: harmony → melody (plan chords first, write melody to fit)
-   - Both are valid, explain trade-offs
-
-4. **Tool usage examples:**
-   ```markdown
-   Example: Harmonizing a 4-bar melody in C major
-
-   1. Read melody:
-      get_notes("melody", 0, 16)
-
-   2. Analyze: Melody has C (beat 0), E (beat 4), G (beat 8), C (beat 12)
-
-   3. Plan chords where melody notes are chord tones:
-      add_chords([
-        {"beat": 0, "chord": "C", "duration": 4},    # Melody C is root
-        {"beat": 4, "chord": "C", "duration": 4},    # Melody E is 3rd
-        {"beat": 8, "chord": "C", "duration": 4},    # Melody G is 5th
-        {"beat": 12, "chord": "F", "duration": 4}    # Melody C is 5th of F
-      ])
-
-   4. Verify:
-      flag_notes(["melody"], 0, 16)
-      # Returns: 0 (all notes fit)
-
-   5. Add bass line using chord_tones:
-      # From add_chords response: C has ["C", "E", "G"]
-      add_notes([
-        {"track": "bass", "pitch": 48, "start": 0, "duration": 4},  # C
-        {"track": "bass", "pitch": 48, "start": 4, "duration": 4},  # C
-        # ...
-      ])
-   ```
-
-5. **Common mistakes to avoid:**
-   - Don't write harmony before planning chords (use `add_chords` first!)
-   - Don't ignore `flag_notes` results (if notes flagged, investigate why)
-   - Don't use overly complex chord symbols pychord won't recognize
-   - Simplify jazz alterations (use "G7" instead of "G7#9b13", add tensions manually if needed)
-
-6. **When to use validation:**
-   - Always after adding melody before harmonizing
-   - After adding harmony to catch voicing mistakes
-   - Don't flag melody tracks with intentional chromatic passing tones
-
 ---
 
 ### Task 8: Edge Cases & Design Decisions
@@ -347,7 +278,7 @@ add_chords([
     {"beat": 4, "chord": "F7", "duration": 4}  # Overlaps beats 4-8
 ])
 ```
-**Decision:** Allow overlap, later chord takes precedence (overwrite, don't error)
+**Decision:** Overlapping calls are allowed. When a later chord overlaps with an existing chord, the original longer chord should be split and partially removed to make room for the later chord. The later chord takes precedence in the overlapping region.
 
 #### Missing Chord at Beat
 ```python
@@ -355,7 +286,7 @@ add_chords([
 # Note at beat 6 (gap!)
 flag_notes(["melody"], 0, 16)
 ```
-**Decision:** Flag notes in gaps (missing harmony is an error)
+**Decision:** Missing harmony is NOT an error. If chords are missing in a section, no notes in that section will be flagged. Only notes that fall within an active chord's duration will be checked for harmony conflicts.
 
 #### Enharmonic Normalization
 **Decision:** Use pychord's default (no custom enharmonic logic). Document that C# and Db are distinct.
