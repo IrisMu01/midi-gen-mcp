@@ -16,6 +16,8 @@ from midi_gen_mcp.tools.song import set_title, get_piece_info
 from midi_gen_mcp.tools.structure import add_section, edit_section, get_sections
 from midi_gen_mcp.tools.track import add_track, remove_track, get_tracks
 from midi_gen_mcp.tools.note import add_notes, remove_notes_in_range, get_notes
+from midi_gen_mcp.tools.harmony import add_chords, get_chords_in_range, remove_chords_in_range
+from midi_gen_mcp.tools.validation import flag_notes, remove_flagged_notes
 from midi_gen_mcp.tools.utility import undo, redo, export_midi
 
 
@@ -97,6 +99,37 @@ class ExportMidiParams(BaseModel):
     filepath: str = Field(..., description="Path to save the MIDI file (should end in .mid or .midi)")
 
 
+class ChordDict(BaseModel):
+    """A single chord entry."""
+    beat: float = Field(..., description="Beat position where chord starts")
+    chord: str = Field(..., description="Chord symbol (e.g., 'C', 'Cm7', 'G7', 'Fmaj9')")
+    duration: float = Field(..., description="Duration of the chord in beats")
+
+
+class AddChordsParams(BaseModel):
+    """Parameters for add_chords."""
+    chords: list[ChordDict] = Field(..., description="List of chords to add")
+
+
+class GetChordsInRangeParams(BaseModel):
+    """Parameters for get_chords_in_range."""
+    start_beat: float = Field(..., description="Start of the beat range")
+    end_beat: float = Field(..., description="End of the beat range")
+
+
+class RemoveChordsInRangeParams(BaseModel):
+    """Parameters for remove_chords_in_range."""
+    start_beat: float = Field(..., description="Start of the beat range")
+    end_beat: float = Field(..., description="End of the beat range")
+
+
+class FlagNotesParams(BaseModel):
+    """Parameters for flag_notes."""
+    tracks: list[str] = Field(..., description="List of track names to check")
+    start_beat: float = Field(..., description="Start of the beat range")
+    end_beat: float = Field(..., description="End of the beat range")
+
+
 # ============================================================================
 # Tool Registration
 # ============================================================================
@@ -166,6 +199,35 @@ async def list_tools() -> list[Tool]:
             name="get_notes",
             description="Query notes, optionally filtered by track and/or time range",
             inputSchema=GetNotesParams.model_json_schema()
+        ),
+
+        # Harmony Tools
+        Tool(
+            name="add_chords",
+            description="Add chord progression to the piece. Validates chord symbols and returns chord tones for each chord.",
+            inputSchema=AddChordsParams.model_json_schema()
+        ),
+        Tool(
+            name="get_chords_in_range",
+            description="Get all chords in a beat range",
+            inputSchema=GetChordsInRangeParams.model_json_schema()
+        ),
+        Tool(
+            name="remove_chords_in_range",
+            description="Remove chords in a beat range. Also clears all flagged notes since harmony context becomes stale.",
+            inputSchema=RemoveChordsInRangeParams.model_json_schema()
+        ),
+
+        # Validation Tools
+        Tool(
+            name="flag_notes",
+            description="Flag notes that fall outside the planned chord progression. Useful for detecting melody-harmony conflicts.",
+            inputSchema=FlagNotesParams.model_json_schema()
+        ),
+        Tool(
+            name="remove_flagged_notes",
+            description="Remove all flagged notes from the piece",
+            inputSchema={"type": "object", "additionalProperties": "false"}
         ),
 
         # Utility
@@ -264,6 +326,29 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 start_time=params.start_time,
                 end_time=params.end_time
             )
+
+        # Harmony Tools
+        elif name == "add_chords":
+            params = AddChordsParams(**arguments)
+            # Convert Pydantic models to dicts
+            chords_list = [chord.model_dump() for chord in params.chords]
+            result = add_chords(chords_list)
+
+        elif name == "get_chords_in_range":
+            params = GetChordsInRangeParams(**arguments)
+            result = get_chords_in_range(params.start_beat, params.end_beat)
+
+        elif name == "remove_chords_in_range":
+            params = RemoveChordsInRangeParams(**arguments)
+            result = remove_chords_in_range(params.start_beat, params.end_beat)
+
+        # Validation Tools
+        elif name == "flag_notes":
+            params = FlagNotesParams(**arguments)
+            result = flag_notes(params.tracks, params.start_beat, params.end_beat)
+
+        elif name == "remove_flagged_notes":
+            result = remove_flagged_notes()
 
         # Utility
         elif name == "undo":

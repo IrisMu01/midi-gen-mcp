@@ -6,7 +6,8 @@ A Model Context Protocol (MCP) server that provides low-level MIDI manipulation 
 
 ## Features
 
-- **14 MCP Tools** for MIDI manipulation
+- **19 MCP Tools** for MIDI manipulation (including harmony and validation tools)
+- **Chord Progression Tracking** with automatic harmony validation
 - **Expression Syntax** for precise timing (e.g., `"9 + 1/3"` for triplets)
 - **General MIDI Support** (128 instrument mappings)
 - **Multi-track MIDI Export** with automatic channel assignment
@@ -232,6 +233,126 @@ Query notes, optionally filtered by track and/or time range.
 
 ---
 
+### Harmony Tools
+
+#### `add_chords`
+Add chord progression to the piece. Validates chord symbols and returns chord tones for each chord.
+
+**Parameters:**
+- `chords` (array): List of chord objects with:
+  - `beat` (number): Beat position where chord starts
+  - `chord` (string): Chord symbol (e.g., "C", "Cm7", "G7", "Fmaj9")
+  - `duration` (number): Duration of the chord in beats
+
+**Returns:**
+- `success` (boolean): Whether all chords were added successfully
+- `chords_added` (array): List of added chords with their chord_tones
+- `errors` (array): Any validation errors for invalid chord symbols
+
+**Supported Chord Symbols:**
+The server uses the `pychord` library for chord parsing. Common chord types include:
+- Major: `C`, `D`, `F#`
+- Minor: `Cm`, `Dm`, `Bbm`
+- Dominant 7th: `C7`, `G7`, `D7`
+- Major 7th: `Cmaj7`, `Fmaj7`
+- Minor 7th: `Cm7`, `Dm7`
+- Diminished: `Cdim`, `Bdim`
+- Augmented: `Caug`
+- Suspended: `Csus4`, `Dsus2`
+- Extended: `C9`, `C11`, `C13`, `Cadd9`
+- 6th chords: `C6`, `Cm6`
+
+**Example:**
+```json
+{
+  "chords": [
+    {"beat": 0, "chord": "C", "duration": 4},
+    {"beat": 4, "chord": "F", "duration": 4},
+    {"beat": 8, "chord": "G7", "duration": 4},
+    {"beat": 12, "chord": "C", "duration": 4}
+  ]
+}
+```
+
+**Overlap Behavior:**
+When a later chord overlaps with an existing chord, the original chord is split and partially removed to make room for the new chord.
+
+#### `get_chords_in_range`
+Get all chords in a beat range.
+
+**Parameters:**
+- `start_beat` (number): Start of the beat range
+- `end_beat` (number): End of the beat range
+
+**Returns:**
+Array of chord objects in the specified range.
+
+**Example:**
+```json
+{
+  "start_beat": 0,
+  "end_beat": 8
+}
+```
+
+#### `remove_chords_in_range`
+Remove chords in a beat range. Also clears all flagged notes since harmony context becomes stale.
+
+**Parameters:**
+- `start_beat` (number): Start of the beat range
+- `end_beat` (number): End of the beat range
+
+---
+
+### Validation Tools
+
+#### `flag_notes`
+Flag notes that fall outside the planned chord progression. Useful for detecting melody-harmony conflicts.
+
+**Parameters:**
+- `tracks` (array of strings): List of track names to check
+- `start_beat` (number): Start of the beat range
+- `end_beat` (number): End of the beat range
+
+**Returns:**
+- `flagged_count` (number): Number of notes flagged
+- `message` (string): Status message
+
+**Behavior:**
+- Auto-clears all previous flags first
+- For each note in the specified tracks and range:
+  - Finds the active chord at the note's start beat
+  - Checks if the note's pitch class matches the chord tones
+  - Flags the note if it doesn't match (sets `flagged: true`)
+- Notes in gaps (where no chord exists) are NOT flagged (missing harmony is not an error)
+
+**Example:**
+```json
+{
+  "tracks": ["melody", "piano"],
+  "start_beat": 0,
+  "end_beat": 16
+}
+```
+
+#### `remove_flagged_notes`
+Remove all flagged notes from the piece.
+
+**Returns:**
+- `removed_notes` (array): List of removed notes with track, pitch, start, duration
+- `count` (number): Number of notes removed
+
+**Self-Correction Workflow Example:**
+
+1. Add melody and chord progression
+2. Flag notes that don't fit the harmony: `flag_notes(["melody"], 0, 16)`
+3. Review flagged notes: `get_notes("melody", 0, 16)` (look for `flagged: true`)
+4. Remove problematic notes: `remove_flagged_notes()`
+5. Add corrected notes: `add_notes([...])`
+6. Verify: `flag_notes(["melody"], 0, 16)` (should return 0)
+
+---
+
 ### Utility
 
 #### `undo`
@@ -327,7 +448,8 @@ The server maintains an in-memory state with the following structure:
       "track": str,
       "pitch": int,                # 0-127 (60 = Middle C)
       "start": str | float,        # Beats, supports expressions
-      "duration": str | float      # Beats, supports expressions
+      "duration": str | float,     # Beats, supports expressions
+      "flagged": bool              # Optional, set by flag_notes tool
     }
   ],
   "sections": [                    # Section list (sorted by start_measure)
@@ -339,6 +461,14 @@ The server maintains an in-memory state with the following structure:
       "time_signature": str,
       "key": str,
       "description": str
+    }
+  ],
+  "chord_progression": [           # Chord progression (sorted by beat)
+    {
+      "beat": float,
+      "chord": str,
+      "duration": float,
+      "chord_tones": list[str]     # Pitch classes (e.g., ["C", "E", "G"])
     }
   ],
   "undo_stack": list,              # Max 10 state snapshots
@@ -367,13 +497,16 @@ make test
 ```
 
 **Test Coverage:**
-- 71 tests across 5 test modules
+- 116 tests across 8 test modules
 - State management (8 tests)
 - Song tools (4 tests)
 - Structure tools (13 tests)
 - Track tools (9 tests)
 - Note operations (17 tests)
 - MIDI export (20 tests)
+- Chord parser (16 tests)
+- Harmony tools (18 tests)
+- Validation tools (13 tests)
 
 ### Project Structure
 
@@ -385,12 +518,15 @@ midi-gen-mcp/
 │       ├── server.py           # MCP server entry point
 │       ├── state.py            # In-memory state management
 │       ├── midi_export.py      # MIDI file generation
+│       ├── chord_parser.py     # Chord symbol parsing (pychord wrapper)
 │       └── tools/              # Tool implementations
 │           ├── __init__.py
 │           ├── song.py         # set_title, get_piece_info
 │           ├── structure.py    # add_section, edit_section, get_sections
 │           ├── track.py        # add_track, remove_track, get_tracks
 │           ├── note.py         # add_notes, remove_notes_in_range, get_notes
+│           ├── harmony.py      # add_chords, get_chords_in_range, remove_chords_in_range
+│           ├── validation.py   # flag_notes, remove_flagged_notes
 │           └── utility.py      # undo, redo, export_midi
 ├── tests/
 │   ├── test_state.py
@@ -398,12 +534,15 @@ midi-gen-mcp/
 │   ├── test_structure.py
 │   ├── test_track.py
 │   ├── test_note.py
-│   └── test_midi_export.py
+│   ├── test_midi_export.py
+│   ├── test_chord_parser.py
+│   ├── test_harmony_tools.py
+│   └── test_validation_tools.py
 ├── pyproject.toml
 ├── Makefile
 ├── README.md
 ├── PLANNING.md
-└── design_doc.md
+└── DESIGN_DOC.md
 ```
 
 ---
@@ -491,17 +630,6 @@ Potential future additions (not in current scope):
 
 ---
 
-## Dependencies
-
-- **Python 3.10+**
-- **mcp[cli] ≥1.25.0** - MCP server framework
-- **mido ≥1.3.0** - MIDI file I/O
-- **httpx ≥0.28.1** - HTTP client (MCP dependency)
-- **pytest ≥7.0.0** (dev) - Testing framework
-- **pytest-asyncio ≥0.21.0** (dev) - Async test support
-
----
-
 ## License
 
 See repository for license information.
@@ -511,15 +639,15 @@ See repository for license information.
 ## Related Documentation
 
 - [PLANNING.md](PLANNING.md) - Implementation planning and progress
-- [design_doc.md](design_doc.md) - Overall system design
+- [DESIGN_DOC.md](DESIGN_DOC.md) - Overall system design
 - [MCP Documentation](https://modelcontextprotocol.io/) - Model Context Protocol
 
 ---
 
 ## Contributing
 
-This is the **Core Component #1: MCP Server** from the overall project. For information about the complete system (including music theory skills and frontend), see `design_doc.md`.
+This is the **Core Component #1: MCP Server** from the overall project. For information about the complete system (including music theory skills and frontend), see `DESIGN_DOC.md`.
 
 ---
 
-**Status:** Core MCP server complete with 71 passing tests. Ready for integration with Claude Desktop.
+**Status:** Core MCP server complete with 116 passing tests. All features including harmony and validation tools implemented. Ready for integration with Claude Desktop.
