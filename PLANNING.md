@@ -13,7 +13,7 @@ The MCP server implementation is complete with all core features:
 - Undo/redo with 10-snapshot limit
 - 71 passing unit tests
 
-See `design_doc.md` for full architecture and `README.md` for usage.
+See `DESIGN_DOC.md` for full architecture and `README.md` for usage.
 
 ---
 
@@ -262,7 +262,7 @@ def remove_flagged_notes() -> List[dict]:
 - Document supported chord symbols (link to pychord)
 - Add example: melody → chords → harmonize → validate → fix
 
-#### Update design_doc.md
+#### Update DESIGN_DOC.md
 - Add harmony tools to tool categories
 - Update compositional workflow (add chord planning phase)
 - Update context window estimates (chord progression ~500 tokens)

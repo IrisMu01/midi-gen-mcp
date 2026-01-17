@@ -542,7 +542,7 @@ midi-gen-mcp/
 ├── Makefile
 ├── README.md
 ├── PLANNING.md
-└── design_doc.md
+└── DESIGN_DOC.md
 ```
 
 ---
@@ -639,14 +639,14 @@ See repository for license information.
 ## Related Documentation
 
 - [PLANNING.md](PLANNING.md) - Implementation planning and progress
-- [design_doc.md](design_doc.md) - Overall system design
+- [DESIGN_DOC.md](DESIGN_DOC.md) - Overall system design
 - [MCP Documentation](https://modelcontextprotocol.io/) - Model Context Protocol
 
 ---
 
 ## Contributing
 
-This is the **Core Component #1: MCP Server** from the overall project. For information about the complete system (including music theory skills and frontend), see `design_doc.md`.
+This is the **Core Component #1: MCP Server** from the overall project. For information about the complete system (including music theory skills and frontend), see `DESIGN_DOC.md`.
 
 ---
 
