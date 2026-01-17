@@ -97,6 +97,21 @@ remove_notes_in_range(track: str, start_time: float, end_time: float)
 get_notes(track: str, start_time: float, end_time: float) -> List[notes]
 ```
 
+#### Harmony Tools
+```python
+add_chords(chords: List[{beat, chord, duration}])  # Validates chord symbols, returns chord_tones
+get_chords_in_range(start_beat: float, end_beat: float) -> List[{beat, chord, duration, chord_tones}]
+remove_chords_in_range(start_beat: float, end_beat: float)
+```
+
+#### Validation Tools
+```python
+flag_notes(tracks: List[str], start_beat: float, end_beat: float) -> {flagged_count, message}
+remove_flagged_notes() -> {removed_notes, count}
+```
+
+**Purpose:** Enable self-correction workflow where Claude can plan chord progressions first, then validate melody notes against harmony to catch conflicts.
+
 #### Utility
 ```python
 undo_last_action()
@@ -324,14 +339,33 @@ Tool calls:
 ```
 
 ### Phase 2: Execution (Section-by-Section)
+
+#### Step 2a: Plan Chord Progression
 ```
 Claude reasoning for intro:
 1. Read intro section details
 2. Apply jazz ballad skills: rootless voicings, extended chords
 3. Apply melancholic principles: descending melody, slower harmonic rhythm
-4. Decide: Start with Dm9, descend to A7alt
-5. Piano left hand: bass + chord foundation (rootless)
-6. Piano right hand: melody D5→A4 with chromatic passing
+4. Decide on progression: Dm9 → G7alt → Cmaj7 → A7alt
+
+Tool calls:
+- add_chords([
+    {"beat": 0, "chord": "Dm9", "duration": 4},
+    {"beat": 4, "chord": "G7", "duration": 4},
+    {"beat": 8, "chord": "Cmaj7", "duration": 4},
+    {"beat": 12, "chord": "A7", "duration": 4}
+  ])
+```
+
+**Benefits:** Chord tones are immediately visible for reference when composing melody and harmony parts.
+
+#### Step 2b: Compose Melody and Harmony
+```
+Claude reasoning for intro:
+1. Get chord progression: get_chords_in_range(0, 16)
+2. Plan melody around chord tones: Dm9 (D,F,A,C,E) → melody starts D5
+3. Piano left hand: bass + chord foundation (rootless)
+4. Piano right hand: melody D5→A4 with chromatic passing
 
 Tool calls:
 - add_notes([
@@ -343,6 +377,20 @@ Tool calls:
     # ... more notes
   ])
 ```
+
+#### Step 2c: Validate Harmony (Optional)
+```
+Tool calls:
+- flag_notes(["piano"], 0, 16)  # Check for notes outside chord tones
+  → Returns: {flagged_count: 0}  # All notes fit the harmony
+```
+
+**Self-Correction Workflow:**
+If notes are flagged:
+1. `get_notes("piano", 0, 16)` → Review flagged notes
+2. `remove_flagged_notes()` → Remove problematic notes
+3. `add_notes([...])` → Add corrected notes
+4. `flag_notes(["piano"], 0, 16)` → Verify (should return 0)
 
 **Note:** The section's description field documents the musical decisions: "Sparse piano, melancholic mood setting. Dm9-G7alt-Cmaj7-A7alt, descending melody D→A, rootless voicings for open jazz sound."
 
@@ -537,10 +585,11 @@ Tool calls:
 - Skills: ~10K tokens (loaded once per session)
 - System prompts: ~5K tokens
 - Song structure + section descriptions: ~2K tokens
+- Chord progression (full piece): ~500 tokens
 - Active section notes: ~3K tokens
 - Conversation history: ~20K tokens
-- **Total active context: ~40K tokens (20% of 200K limit)**
-- **Remaining for iteration: ~160K tokens**
+- **Total active context: ~40.5K tokens (20% of 200K limit)**
+- **Remaining for iteration: ~159.5K tokens**
 
 ---
 

@@ -11,8 +11,9 @@ class State:
 
     title: str = "Untitled"
     tracks: dict[str, dict[str, Any]] = field(default_factory=dict)
-    notes: list[dict[str, Any]] = field(default_factory=list)
+    notes: list[dict[str, Any]] = field(default_factory=list)  # Notes can have optional "flagged": bool field
     sections: list[dict[str, Any]] = field(default_factory=list)
+    chord_progression: list[dict[str, Any]] = field(default_factory=list)  # [{beat, chord, duration, chord_tones}]
     undo_stack: list[dict[str, Any]] = field(default_factory=list)
     redo_stack: list[dict[str, Any]] = field(default_factory=list)
 
@@ -39,6 +40,7 @@ def snapshot_state() -> dict[str, Any]:
         'tracks': copy.deepcopy(_state.tracks),
         'notes': copy.deepcopy(_state.notes),
         'sections': copy.deepcopy(_state.sections),
+        'chord_progression': copy.deepcopy(_state.chord_progression),
     }
 
 
@@ -48,6 +50,7 @@ def restore_state(snapshot: dict[str, Any]) -> None:
     _state.tracks = copy.deepcopy(snapshot['tracks'])
     _state.notes = copy.deepcopy(snapshot['notes'])
     _state.sections = copy.deepcopy(snapshot['sections'])
+    _state.chord_progression = copy.deepcopy(snapshot.get('chord_progression', []))
 
 
 def before_mutation() -> None:
