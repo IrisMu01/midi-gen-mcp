@@ -291,3 +291,87 @@ def test_enharmonic_equivalents():
 
     # Should not be flagged because C# = Db
     assert result["flagged_count"] == 0
+
+
+def test_chord_notes_across_octaves():
+    """Test that chord tones are recognized across multiple octaves."""
+    reset_state()
+    add_track("piano", "piano")
+
+    # Add C major chord (C, E, G)
+    add_chords([{"beat": 0, "chord": "C", "duration": 4}])
+
+    state = get_state()
+    # Add C, E, G across different octaves
+    state.notes = [
+        {"track": "piano", "pitch": 36, "start": 0, "duration": 1},  # C2
+        {"track": "piano", "pitch": 48, "start": 0.5, "duration": 1},  # C3
+        {"track": "piano", "pitch": 60, "start": 1, "duration": 1},  # C4 (middle C)
+        {"track": "piano", "pitch": 72, "start": 1.5, "duration": 1},  # C5
+        {"track": "piano", "pitch": 52, "start": 2, "duration": 1},  # E3
+        {"track": "piano", "pitch": 64, "start": 2.5, "duration": 1},  # E4
+        {"track": "piano", "pitch": 55, "start": 3, "duration": 1},  # G3
+        {"track": "piano", "pitch": 67, "start": 3.5, "duration": 1},  # G4
+    ]
+
+    result = flag_notes(["piano"], 0, 4)
+
+    # All notes should be recognized as chord tones regardless of octave
+    assert result["flagged_count"] == 0
+    assert all("flagged" not in note for note in state.notes)
+
+
+def test_non_chord_notes_across_octaves():
+    """Test that non-chord tones are flagged across all octaves."""
+    reset_state()
+    add_track("piano", "piano")
+
+    # Add C major chord (C, E, G)
+    add_chords([{"beat": 0, "chord": "C", "duration": 4}])
+
+    state = get_state()
+    # Add F# (not in C major) in different octaves
+    state.notes = [
+        {"track": "piano", "pitch": 42, "start": 0, "duration": 1},  # F#2
+        {"track": "piano", "pitch": 54, "start": 1, "duration": 1},  # F#3
+        {"track": "piano", "pitch": 66, "start": 2, "duration": 1},  # F#4
+        {"track": "piano", "pitch": 78, "start": 3, "duration": 1},  # F#5
+    ]
+
+    result = flag_notes(["piano"], 0, 4)
+
+    # All F# notes should be flagged regardless of octave
+    assert result["flagged_count"] == 4
+    assert all(note.get("flagged") is True for note in state.notes)
+
+
+def test_mixed_chord_notes_across_octaves():
+    """Test validation with mix of chord and non-chord tones across octaves."""
+    reset_state()
+    add_track("piano", "piano")
+
+    # Add Dm7 chord (D, F, A, C)
+    add_chords([{"beat": 0, "chord": "Dm7", "duration": 4}])
+
+    state = get_state()
+    state.notes = [
+        # Chord tones in various octaves
+        {"track": "piano", "pitch": 50, "start": 0, "duration": 1},  # D3 (ok)
+        {"track": "piano", "pitch": 62, "start": 0.5, "duration": 1},  # D4 (ok)
+        {"track": "piano", "pitch": 53, "start": 1, "duration": 1},  # F3 (ok)
+        {"track": "piano", "pitch": 69, "start": 1.5, "duration": 1},  # A4 (ok)
+        {"track": "piano", "pitch": 48, "start": 2, "duration": 1},  # C3 (ok)
+        # Non-chord tones in various octaves
+        {"track": "piano", "pitch": 61, "start": 2.5, "duration": 1},  # C#4 (flagged)
+        {"track": "piano", "pitch": 64, "start": 3, "duration": 1},  # E4 (flagged)
+        {"track": "piano", "pitch": 76, "start": 3.5, "duration": 1},  # E5 (flagged)
+    ]
+
+    result = flag_notes(["piano"], 0, 4)
+
+    # Should flag exactly 3 notes (the non-chord tones)
+    assert result["flagged_count"] == 3
+
+    # Verify which notes were flagged
+    flagged_pitches = [note["pitch"] for note in state.notes if note.get("flagged")]
+    assert set(flagged_pitches) == {61, 64, 76}  # C#4, E4, E5

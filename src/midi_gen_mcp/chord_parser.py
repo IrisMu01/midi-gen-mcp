@@ -2,6 +2,7 @@
 
 from typing import List
 from pychord import Chord
+from pychord.quality import QualityManager
 
 
 def parse_chord_symbol(symbol: str) -> dict:
@@ -40,11 +41,7 @@ def parse_chord_symbol(symbol: str) -> dict:
 
 
 def get_supported_qualities() -> List[str]:
-    """Return list of supported chord qualities for error messages."""
-    # Common chord qualities supported by pychord
-    return [
-        "major", "minor (m)", "dominant 7th (7)", "major 7th (maj7)",
-        "minor 7th (m7)", "diminished (dim)", "augmented (aug)",
-        "suspended 4th (sus4)", "9th (9)", "11th (11)", "13th (13)",
-        "add9", "6th (6)", "m6", "dim7", "m7b5"
-    ]
+    """Return list of supported chord qualities from pychord."""
+    # Get all chord qualities from pychord's QualityManager
+    quality_manager = QualityManager()
+    return list(quality_manager.get_qualities().keys())

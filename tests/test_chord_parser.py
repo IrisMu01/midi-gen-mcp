@@ -107,13 +107,16 @@ def test_parse_empty_string():
 
 
 def test_get_supported_qualities():
-    """Test getting list of supported qualities."""
+    """Test getting list of supported qualities from pychord."""
     qualities = get_supported_qualities()
     assert isinstance(qualities, list)
     assert len(qualities) > 0
-    # Check for some common qualities
-    assert any("major" in q.lower() for q in qualities)
-    assert any("minor" in q.lower() for q in qualities)
+    # Check for some common chord quality symbols from pychord
+    assert "maj" in qualities  # major
+    assert "m" in qualities  # minor
+    assert "7" in qualities  # dominant 7th
+    assert "dim" in qualities  # diminished
+    assert "aug" in qualities  # augmented
 
 
 def test_sharp_chord():

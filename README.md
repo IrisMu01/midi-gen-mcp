@@ -630,18 +630,6 @@ Potential future additions (not in current scope):
 
 ---
 
-## Dependencies
-
-- **Python 3.10+**
-- **mcp[cli] ≥1.25.0** - MCP server framework
-- **mido ≥1.3.0** - MIDI file I/O
-- **pychord ≥0.6.0** - Chord symbol parsing
-- **httpx ≥0.28.1** - HTTP client (MCP dependency)
-- **pytest ≥7.0.0** (dev) - Testing framework
-- **pytest-asyncio ≥0.21.0** (dev) - Async test support
-
----
-
 ## License
 
 See repository for license information.
