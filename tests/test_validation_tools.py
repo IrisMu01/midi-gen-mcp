@@ -293,6 +293,42 @@ def test_enharmonic_equivalents():
     assert result["flagged_count"] == 0
 
 
+def test_non_chord_notes_not_flagged_in_unvalidated_tracks():
+    """Test that non-chord notes aren't flagged when validation doesn't run on those tracks."""
+    reset_state()
+    add_track("melody", "piano")
+    add_track("bass", "bass")
+    add_track("drums", "drums")
+
+    # Add C major chord (C, E, G)
+    add_chords([{"beat": 0, "chord": "C", "duration": 4}])
+
+    state = get_state()
+    state.notes = [
+        # Melody track - has non-chord tones, will be validated
+        {"track": "melody", "pitch": 60, "start": 0, "duration": 1},  # C (ok)
+        {"track": "melody", "pitch": 61, "start": 1, "duration": 1},  # C# (should be flagged)
+        # Bass track - has non-chord tones, but won't be validated
+        {"track": "bass", "pitch": 49, "start": 0, "duration": 1},   # C# (should NOT be flagged)
+        {"track": "bass", "pitch": 42, "start": 1, "duration": 1},   # F# (should NOT be flagged)
+        # Drums track - has non-chord tones, but won't be validated
+        {"track": "drums", "pitch": 66, "start": 0, "duration": 1},  # F# (should NOT be flagged)
+    ]
+
+    # Only validate melody track
+    result = flag_notes(["melody"], 0, 4)
+
+    # Only melody track's C# should be flagged
+    assert result["flagged_count"] == 1
+
+    # Verify only melody track's non-chord note is flagged
+    assert state.notes[0].get("flagged") is None  # melody C (ok)
+    assert state.notes[1].get("flagged") is True  # melody C# (flagged)
+    assert state.notes[2].get("flagged") is None  # bass C# (not checked)
+    assert state.notes[3].get("flagged") is None  # bass F# (not checked)
+    assert state.notes[4].get("flagged") is None  # drums F# (not checked)
+
+
 def test_chord_notes_across_octaves():
     """Test that chord tones are recognized across multiple octaves."""
     reset_state()
