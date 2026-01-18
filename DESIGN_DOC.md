@@ -127,39 +127,20 @@ export_midi(filepath: str)
 
 **Note:** There is no separate journal - section descriptions serve both planning and execution notes.
 
-### 2. Skills (Music Theory Knowledge)
+### 2. Skills (Workflow Guidance)
 
-**Purpose:** Provide LLM with musical vocabulary, principles, and context without prescriptive formulas.
+**Purpose:** Guide Claude on HOW to use MCP tools effectively, not WHAT music theory it already knows.
 
-**Structure:**
+**Key Insight:** Claude already understands music theory, harmony, and genre conventions. Skills should focus on the workflow patterns and technical details specific to this MCP server: validation loops, expression syntax, batching strategies, and when to document decisions in section descriptions.
+
+**Minimal Structure (Prototype):**
 ```
 /mnt/skills/user/
-├── music-theory/
-│   ├── harmony/
-│   │   ├── intervals.md (consonance, dissonance, tension-resolution)
-│   │   ├── chord-construction.md (triads, extensions, alterations, voicings)
-│   │   ├── voice-leading.md (smooth motion, contrary motion, voice independence)
-│   │   └── functional-harmony.md (tonic-dominant relationships, cadences, modulation)
-│   ├── melody/
-│   │   ├── contour.md (arch shapes, climax points, stepwise vs. leaps)
-│   │   ├── motif-development.md (repetition, sequence, fragmentation, augmentation)
-│   │   └── phrase-structure.md (antecedent-consequent, periods, cadential patterns)
-│   └── rhythm/
-│       ├── meter-feel.md (duple vs. triple, strong-weak patterns, groove)
-│       ├── syncopation.md (off-beat accents, anticipation, displaced accents)
-│       └── rhythmic-motifs.md (ostinato, hemiola, polyrhythm)
-├── genres/
-│   ├── baroque.md (functional harmony, counterpoint, ornamentation, figured bass)
-│   ├── classical.md (periodic phrasing, alberti bass, sonata form, balanced proportions)
-│   ├── romantic.md (extended harmony, chromaticism, rubato, programmatic elements)
-│   └── jazz-big-band.md (swing rhythm, extended chords, improvisation, section writing)
-└── instrumentation/
-    ├── piano.md (voicing, register, pedaling, stride bass)
-    ├── strings.md (violin, cello: bowing, double stops, harmonics, pizzicato)
-    ├── brass.md (trumpet, trombone: lip trills, mutes, section blend)
-    ├── woodwinds.md (flute, clarinet: breathing, tonguing, timbral variety)
-    └── drums.md (groove patterns, fills, cymbal work, dynamic shaping)
+└── music-composition/
+    └── SKILL.md
 ```
+
+**Rationale:** Start minimal and expand only if needed. Comprehensive music theory skills would waste context window on knowledge Claude already has. The prototype should test whether minimal workflow guidance is sufficient.
 
 **Content Philosophy:**
 
@@ -711,7 +692,7 @@ Key innovations:
 - **Section descriptions** for transparent decision-making
 - **Section-based organization** for context efficiency
 - **Low-level CRUD tools** to keep creativity in the LLM
-- **Comprehensive skills** teaching principles over formulas
+- **Minimal workflow-focused skills** guiding tool usage, not redundant music theory
 - **Expression support** for note timing (e.g., "9 + 1/3") to minimize quantization errors
 
 Success depends on whether LLM reasoning + music theory knowledge can match or exceed the musical quality of models trained on millions of examples. The prototype will test this hypothesis with manageable risk and cost.
