@@ -147,7 +147,7 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="get_piece_info",
             description="Get overview information about the current piece (title, sections, tracks, note count)",
-            inputSchema={"type": "object", "additionalProperties": "false"}
+            inputSchema={"type": "object", "additionalProperties": False}
         ),
 
         # Structure Management
@@ -164,7 +164,7 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="get_sections",
             description="Get all sections in the piece",
-            inputSchema={"type": "object", "additionalProperties": "false"}
+            inputSchema={"type": "object", "additionalProperties": False}
         ),
 
         # Track Management
@@ -181,7 +181,7 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="get_tracks",
             description="Get all tracks in the piece",
-            inputSchema={"type": "object", "additionalProperties": "false"}
+            inputSchema={"type": "object", "additionalProperties": False}
         ),
 
         # Note Operations
@@ -227,19 +227,19 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="remove_flagged_notes",
             description="Remove all flagged notes from the piece",
-            inputSchema={"type": "object", "additionalProperties": "false"}
+            inputSchema={"type": "object", "additionalProperties": False}
         ),
 
         # Utility
         Tool(
             name="undo",
             description="Undo the last action (max 10 undo steps)",
-            inputSchema={"type": "object", "additionalProperties": "false"}
+            inputSchema={"type": "object", "additionalProperties": False}
         ),
         Tool(
             name="redo",
             description="Redo the last undone action",
-            inputSchema={"type": "object", "additionalProperties": "false"}
+            inputSchema={"type": "object", "additionalProperties": False}
         ),
         Tool(
             name="export_midi",
