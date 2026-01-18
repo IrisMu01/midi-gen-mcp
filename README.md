@@ -17,6 +17,14 @@ A Model Context Protocol (MCP) server that provides low-level MIDI manipulation 
 
 ## Installation
 
+### Prerequisites
+
+Install [uv](https://docs.astral.sh/uv/) (recommended):
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
 ### From Source
 
 ```bash
@@ -24,15 +32,18 @@ A Model Context Protocol (MCP) server that provides low-level MIDI manipulation 
 git clone https://github.com/IrisMu01/midi-gen-mcp.git
 cd midi-gen-mcp
 
-# Install in development mode
+# Install with uv (recommended)
+uv sync --all-extras
+
+# Or use pip (legacy)
 pip install -e ".[dev]"
 ```
 
 ### Quick Setup
 
 ```bash
-make install    # Install with dev dependencies
-make test       # Run all tests
+make install    # Install with dev dependencies (uses uv)
+make test       # Run all tests (uses uv)
 ```
 
 ## Usage
@@ -42,10 +53,14 @@ make test       # Run all tests
 The server communicates via stdio, designed for use with Claude Desktop or other MCP clients.
 
 ```bash
-# Run the server directly
-midi-gen-mcp
+# Run with uv (recommended)
+uv run midi-gen-mcp
 
-# Or with Python
+# Or with uv run python
+uv run python -m midi_gen_mcp.server
+
+# Legacy methods (if installed globally)
+midi-gen-mcp
 python -m midi_gen_mcp.server
 ```
 
@@ -53,6 +68,19 @@ python -m midi_gen_mcp.server
 
 Add to your Claude Desktop MCP settings (`claude_desktop_config.json`):
 
+**Using uv (recommended):**
+```json
+{
+  "mcpServers": {
+    "midi-gen": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/midi-gen-mcp", "run", "midi-gen-mcp"]
+    }
+  }
+}
+```
+
+**Using direct command:**
 ```json
 {
   "mcpServers": {
@@ -63,8 +91,7 @@ Add to your Claude Desktop MCP settings (`claude_desktop_config.json`):
 }
 ```
 
-Or use the full Python path:
-
+**Using Python path:**
 ```json
 {
   "mcpServers": {
@@ -484,15 +511,15 @@ The server maintains an in-memory state with the following structure:
 
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run with verbose output
-pytest -v
+uv run pytest -v
 
 # Run specific test file
-pytest tests/test_note.py
+uv run pytest tests/test_note.py
 
-# Using Make
+# Using Make (uses uv internally)
 make test
 ```
 
