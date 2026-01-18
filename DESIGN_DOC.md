@@ -127,56 +127,74 @@ export_midi(filepath: str)
 
 **Note:** There is no separate journal - section descriptions serve both planning and execution notes.
 
-### 2. Skills (Music Theory Knowledge)
+### 2. Skills (Workflow Guidance)
 
-**Purpose:** Provide LLM with musical vocabulary, principles, and context without prescriptive formulas.
+**Purpose:** Guide Claude on HOW to use MCP tools effectively, not WHAT music theory it already knows.
 
-**Structure:**
+**Key Insight:** Claude already understands music theory, harmony, and genre conventions. Skills should focus on the workflow patterns and technical details specific to this MCP server: validation loops, expression syntax, batching strategies, and when to document decisions in section descriptions.
+
+**Minimal Structure (Prototype):**
 ```
 /mnt/skills/user/
-├── music-theory/
-│   ├── harmony/
-│   │   ├── intervals.md (consonance, dissonance, tension-resolution)
-│   │   ├── chord-construction.md (triads, extensions, alterations, voicings)
-│   │   ├── voice-leading.md (smooth motion, contrary motion, voice independence)
-│   │   └── functional-harmony.md (tonic-dominant relationships, cadences, modulation)
-│   ├── melody/
-│   │   ├── contour.md (arch shapes, climax points, stepwise vs. leaps)
-│   │   ├── motif-development.md (repetition, sequence, fragmentation, augmentation)
-│   │   └── phrase-structure.md (antecedent-consequent, periods, cadential patterns)
-│   └── rhythm/
-│       ├── meter-feel.md (duple vs. triple, strong-weak patterns, groove)
-│       ├── syncopation.md (off-beat accents, anticipation, displaced accents)
-│       └── rhythmic-motifs.md (ostinato, hemiola, polyrhythm)
-├── genres/
-│   ├── baroque.md (functional harmony, counterpoint, ornamentation, figured bass)
-│   ├── classical.md (periodic phrasing, alberti bass, sonata form, balanced proportions)
-│   ├── romantic.md (extended harmony, chromaticism, rubato, programmatic elements)
-│   └── jazz-big-band.md (swing rhythm, extended chords, improvisation, section writing)
-└── instrumentation/
-    ├── piano.md (voicing, register, pedaling, stride bass)
-    ├── strings.md (violin, cello: bowing, double stops, harmonics, pizzicato)
-    ├── brass.md (trumpet, trombone: lip trills, mutes, section blend)
-    ├── woodwinds.md (flute, clarinet: breathing, tonguing, timbral variety)
-    └── drums.md (groove patterns, fills, cymbal work, dynamic shaping)
+└── music-composition/
+    └── SKILL.md
 ```
+
+**Rationale:** Start minimal and expand only if needed. Comprehensive music theory skills would waste context window on knowledge Claude already has. The prototype should test whether minimal workflow guidance is sufficient.
 
 **Content Philosophy:**
 
+Skills should describe **workflows** with appropriate degrees of freedom, not prescriptive formulas or bare principles.
+
+**High Degree of Freedom: LLM Workflow**
+- Describe what the LLM should think about and in what order
+- Provide workflow structure: "First consider X, then decide Y, finally compose Z"
+- Suggest creative decision points: "At this stage, choose between approaches A, B, or C based on..."
+- Give process guidance: "Analyze the existing harmony before adding melody"
+- Include musical reasoning steps: "Plan the emotional arc before selecting specific chords"
+
+Example workflow snippet:
+```
+When composing a jazz ballad verse:
+1. Review the section's emotional intent and key
+2. Decide on harmonic rhythm (how often chords change)
+3. Select chord progression that supports the mood
+4. For each chord, consider voice leading from the previous chord
+5. Add melody that highlights chord tones and creates a memorable contour
+6. Add bass line that provides harmonic foundation
+7. Review overall texture and adjust density as needed
+```
+
+**Medium Degree of Freedom: MCP Tool Call Details**
+- Specify which tools to use for specific tasks
+- Provide example tool call patterns
+- Describe batching strategies for efficiency
+- Include validation workflows with specific tool sequences
+
+Example tool guidance:
+```
+To implement a chord progression:
+1. Use add_chords() to plan the harmonic framework first
+2. Use get_chords_in_range() to retrieve chord tones for reference
+3. Use add_notes() in batches (30-50 notes per call) for each instrument
+4. Use flag_notes() on melody tracks to validate against harmony
+5. If conflicts found, use remove_flagged_notes() and revise
+```
+
 ✅ **DO Include:**
-- Principles and their effects ("descending bass lines evoke melancholy")
-- Multiple options ("tension can be created via A, B, or C")
-- Context and trade-offs ("dense textures work for climax but mask melody")
-- Genre conventions ("Baroque favors functional harmony, less chromaticism")
-- Instrumentation ranges and voicing techniques
+- Workflow steps with decision points
+- MCP tool sequences for common tasks
+- When to validate and self-correct
+- How to organize tool calls efficiently (batching, ordering)
+- Context management: when to read vs. remember section details
 
 ❌ **DON'T Include:**
-- Step-by-step formulas ("intro: 4 bars, verse: 8 bars")
-- Rigid rules ("always resolve leading tone up")
-- Prescriptive recipes ("sad songs must use i-VI-III-VII")
-- Generic templates to fill in
+- Rigid "always do this" rules without context
+- Complete note-level examples (let LLM compose specifics)
+- Prescriptive formulas ("verse must be 8 bars")
+- Tool calls with hardcoded values (show structure, not content)
 
-**Balance:** Teach "why" (principles), not "what" (formulas). Claude should understand musical language and compose original sentences, not rearrange pre-written paragraphs.
+**Balance:** Guide the LLM's creative process and tool usage workflow while preserving freedom in musical decisions. Skills teach "how to think and work," not "what to output."
 
 ### 3. Frontend DAW
 
@@ -674,7 +692,7 @@ Key innovations:
 - **Section descriptions** for transparent decision-making
 - **Section-based organization** for context efficiency
 - **Low-level CRUD tools** to keep creativity in the LLM
-- **Comprehensive skills** teaching principles over formulas
+- **Minimal workflow-focused skills** guiding tool usage, not redundant music theory
 - **Expression support** for note timing (e.g., "9 + 1/3") to minimize quantization errors
 
 Success depends on whether LLM reasoning + music theory knowledge can match or exceed the musical quality of models trained on millions of examples. The prototype will test this hypothesis with manageable risk and cost.
