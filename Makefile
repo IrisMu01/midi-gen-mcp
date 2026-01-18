@@ -1,13 +1,13 @@
-.PHONY: install test clean
+.PHONY: install test clean sync
 
 install:
-	pip install -e ".[dev]"
+	uv sync --all-extras
 
-update:
-	pip install --upgrade --force-reinstall .
+sync:
+	uv sync
 
 test:
-	python -m pytest tests/ -v
+	uv run pytest tests/ -v
 
 clean:
 	rm -rf build/
