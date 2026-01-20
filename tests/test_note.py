@@ -60,6 +60,25 @@ def test_add_notes_invalid_pitch():
     assert "Pitch" in result
 
 
+def test_add_notes_invalid_velocity():
+    """Test adding notes with invalid velocity."""
+    add_track("piano", "piano")
+
+    # Test velocity too low
+    result = add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1, "velocity": -1},
+    ])
+    assert "Error" in result
+    assert "Velocity" in result
+
+    # Test velocity too high
+    result = add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1, "velocity": 128},
+    ])
+    assert "Error" in result
+    assert "Velocity" in result
+
+
 def test_add_notes_invalid_expression():
     """Test adding notes with invalid expression."""
     add_track("piano", "piano")
