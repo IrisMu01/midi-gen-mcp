@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 # Import all tool functions
 from midi_gen_mcp.tools.song import set_title, get_piece_info
 from midi_gen_mcp.tools.structure import add_section, edit_section, get_sections
-from midi_gen_mcp.tools.track import add_track, remove_track, get_tracks
+from midi_gen_mcp.tools.track import add_track, edit_track, remove_track, get_tracks
 from midi_gen_mcp.tools.note import add_notes, remove_notes_in_range, get_notes
 from midi_gen_mcp.tools.harmony import add_chords, get_chords_in_range, remove_chords_in_range
 from midi_gen_mcp.tools.validation import flag_notes, remove_flagged_notes
@@ -62,6 +62,13 @@ class AddTrackParams(BaseModel):
     instrument: str = Field(..., description="Instrument name (e.g., 'piano', 'violin', 'drums')")
     volume: int = Field(default=100, description="Track volume (0-127, default 100) - MIDI CC7", ge=0, le=127)
     pan: int = Field(default=64, description="Track pan (0=hard left, 64=center, 127=hard right, default 64) - MIDI CC10", ge=0, le=127)
+
+
+class EditTrackParams(BaseModel):
+    """Parameters for edit_track."""
+    name: str = Field(..., description="Name of the track to edit")
+    volume: Optional[int] = Field(None, description="New volume (0-127) - MIDI CC7", ge=0, le=127)
+    pan: Optional[int] = Field(None, description="New pan (0-127) - MIDI CC10", ge=0, le=127)
 
 
 class RemoveTrackParams(BaseModel):
@@ -175,6 +182,11 @@ async def list_tools() -> list[Tool]:
             name="add_track",
             description="Add a new track to the piece with optional volume (CC7) and pan (CC10) settings",
             inputSchema=AddTrackParams.model_json_schema()
+        ),
+        Tool(
+            name="edit_track",
+            description="Edit an existing track's volume and/or pan settings without affecting notes",
+            inputSchema=EditTrackParams.model_json_schema()
         ),
         Tool(
             name="remove_track",
@@ -303,6 +315,10 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         elif name == "add_track":
             params = AddTrackParams(**arguments)
             result = add_track(params.name, params.instrument, params.volume, params.pan)
+
+        elif name == "edit_track":
+            params = EditTrackParams(**arguments)
+            result = edit_track(params.name, params.volume, params.pan)
 
         elif name == "remove_track":
             params = RemoveTrackParams(**arguments)

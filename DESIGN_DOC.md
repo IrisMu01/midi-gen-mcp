@@ -85,14 +85,15 @@ get_sections() -> List[{name, start_measure, end_measure, tempo, time_signature,
 
 #### Track Management
 ```python
-add_track(name: str, instrument: str)
-remove_track(name: str)
-get_tracks() -> List[{name, instrument}]
+add_track(name: str, instrument: str, volume: int = 100, pan: int = 64)  # volume=CC7, pan=CC10
+edit_track(name: str, volume: int = None, pan: int = None)  # Update volume/pan without affecting notes
+remove_track(name: str)  # Removes track and all its notes
+get_tracks() -> Dict[{name, instrument, volume, pan}]
 ```
 
 #### Note Operations (Core CRUD)
 ```python
-add_notes(notes: List[{track, pitch, start, duration}])  # start/duration support expressions like "9 + 1/3"
+add_notes(notes: List[{track, pitch, start, duration, velocity?}])  # start/duration support expressions like "9 + 1/3", velocity 0-127 (default 64)
 remove_notes_in_range(track: str, start_time: float, end_time: float)
 get_notes(track: str, start_time: float, end_time: float) -> List[notes]
 ```

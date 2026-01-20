@@ -100,6 +100,9 @@ tests/                     # 137 pytest tests (100% passing)
   - Instrument: GM instrument name (e.g., `"piano"`, `"violin"`)
   - Volume: MIDI CC7 (0-127, default 100)
   - Pan: MIDI CC10 (0=left, 64=center, 127=right)
+- `edit_track(name, volume?, pan?)`: Update track volume/pan without affecting notes
+  - At least one of volume or pan must be provided
+  - Does not modify existing notes
 - `remove_track(name)`: Remove track + all notes
 - `get_tracks()`: Query all tracks
 

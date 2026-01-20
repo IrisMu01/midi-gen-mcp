@@ -41,6 +41,58 @@ def add_track(name: str, instrument: str, volume: int = 100, pan: int = 64) -> s
     return f"Added track '{name}' ({instrument})"
 
 
+def edit_track(name: str, volume: int = None, pan: int = None) -> str:
+    """
+    Edit an existing track's volume and/or pan settings.
+
+    Args:
+        name: Name of the track to edit (must exist)
+        volume: New volume (0-127, optional) - MIDI CC7
+        pan: New pan (0-127, optional) - MIDI CC10
+
+    Returns:
+        Confirmation message
+
+    Note:
+        This function only updates the track settings, not the notes.
+        At least one of volume or pan must be provided.
+    """
+    before_mutation()
+    state = get_state()
+
+    # Check track exists
+    if name not in state.tracks:
+        return f"Error: Track '{name}' not found"
+
+    # Check that at least one parameter is provided
+    if volume is None and pan is None:
+        return "Error: Must specify at least one of volume or pan to edit"
+
+    # Validate volume if provided
+    if volume is not None:
+        if not isinstance(volume, int) or not (0 <= volume <= 127):
+            return f"Error: volume must be 0-127, got {volume}"
+
+    # Validate pan if provided
+    if pan is not None:
+        if not isinstance(pan, int) or not (0 <= pan <= 127):
+            return f"Error: pan must be 0-127, got {pan}"
+
+    # Update track settings
+    track = state.tracks[name]
+    updated = []
+
+    if volume is not None:
+        track["volume"] = volume
+        updated.append(f"volume={volume}")
+
+    if pan is not None:
+        track["pan"] = pan
+        updated.append(f"pan={pan}")
+
+    return f"Updated track '{name}' ({', '.join(updated)})"
+
+
 def remove_track(name: str) -> str:
     """
     Remove a track and all its notes.
