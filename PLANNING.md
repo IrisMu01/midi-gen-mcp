@@ -60,6 +60,11 @@ midi_track.append(mido.MetaMessage("set_tempo", tempo=microseconds_per_beat, tim
 - Export MIDI, import into Logic/Ableton
 - Verify tempo changes occur at correct measures
 
+**Undo/Redo Compatibility:**
+- Tempo is already part of section dict, which is captured in `state.sections`
+- `snapshot_state()` already includes sections via `copy.deepcopy(state.sections)`
+- No changes needed - existing undo/redo handles tempo changes
+
 ---
 
 ### Task 2: Add Velocity Support
@@ -84,6 +89,8 @@ Add optional `velocity` field (0-127, default 64):
 **File:** `src/midi_gen_mcp/tools/notes.py`
 - `add_notes()`: Accept `velocity` in note dicts (optional)
 - No breaking changes (defaults to 64 if not provided)
+
+**Note:** No changes needed to `state.py` - velocity is already part of note dict, undo/redo already captures it
 
 #### 2c. Update MIDI Export
 **File:** `src/midi_gen_mcp/midi_export.py` (line 422)
@@ -134,6 +141,12 @@ def add_track(
 **Validation:**
 - Volume: 0-127 (MIDI valid range)
 - Pan: 0-127 (0=hard left, 64=center, 127=hard right)
+- Return error message if values out of range
+
+**Undo/Redo Compatibility:**
+- Verify `state.py` `snapshot_state()` and `restore_state()` already handle tracks dict
+- Track dict values (including new volume/pan fields) are captured in snapshots via `copy.deepcopy()`
+- No changes needed - existing undo/redo infrastructure handles arbitrary track fields
 
 #### 3c. Update MIDI Export
 **File:** `src/midi_gen_mcp/midi_export.py` (after line 377)
@@ -165,6 +178,15 @@ midi_track.append(mido.Message("control_change", control=10, value=pan, channel=
 - [ ] Multiple tempo sections: 60 → 120 → 90 BPM across 3+ sections
 - [ ] Notes with and without explicit velocity (test default fallback)
 
+### Undo/Redo Compatibility Tests
+- [ ] Add note with velocity=100, undo, verify note removed
+- [ ] Add note with velocity=100, redo, verify velocity preserved
+- [ ] Add track with volume=50, pan=127, undo, verify track removed
+- [ ] Add track with volume=50, pan=127, redo, verify volume/pan preserved
+- [ ] Add section with tempo=90, undo, verify section removed
+- [ ] Modify track volume from 100 to 50, undo, verify restored to 100
+- [ ] Complex workflow: add track → add notes → modify tempo → undo×3 → redo×2, verify state consistency
+
 ### Invalid Input Tests (Expect MCP Server Errors)
 - [ ] Velocity out of range: -1, 128, 256, 1000
 - [ ] Volume out of range: -10, 128, 200
@@ -194,3 +216,5 @@ midi_track.append(mido.Message("control_change", control=10, value=pan, channel=
 - [ ] Existing tests pass, new tests added for new features
 - [ ] Invalid inputs return clear error messages (not crashes)
 - [ ] Error messages specify valid ranges (e.g., "velocity must be 0-127, got 200")
+- [ ] Undo/redo correctly captures and restores velocity, volume, pan, and tempo changes
+- [ ] Undo/redo snapshots maintain full state consistency across all new features
