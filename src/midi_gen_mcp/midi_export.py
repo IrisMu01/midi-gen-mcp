@@ -325,6 +325,66 @@ def export_midi(filepath: str) -> str:
     # Create MIDI file (Type 1 = multiple tracks)
     midi = mido.MidiFile(type=1, ticks_per_beat=TICKS_PER_BEAT)
 
+    # Create tempo track (Track 0) with all tempo and time signature changes
+    tempo_track = mido.MidiTrack()
+    midi.tracks.append(tempo_track)
+    tempo_track.append(mido.MetaMessage("track_name", name="Tempo Track", time=0))
+
+    # Get default time signature and tempo
+    if state.sections:
+        default_time_sig = state.sections[0].get("time_signature", "4/4")
+        default_tempo = state.sections[0].get("tempo", 120)
+    else:
+        default_time_sig = "4/4"
+        default_tempo = 120
+
+    # Add initial time signature and tempo at time=0
+    numerator, denominator = map(int, default_time_sig.split("/"))
+    tempo_track.append(mido.MetaMessage(
+        "time_signature",
+        numerator=numerator,
+        denominator=denominator,
+        clocks_per_click=24,
+        notated_32nd_notes_per_beat=8,
+        time=0
+    ))
+
+    microseconds_per_beat = int(60_000_000 / default_tempo)
+    tempo_track.append(mido.MetaMessage("set_tempo", tempo=microseconds_per_beat, time=0))
+
+    # Collect all tempo changes from sections (sorted by start_measure)
+    tempo_events = []
+    if state.sections and len(state.sections) > 1:
+        sorted_sections = sorted(state.sections, key=lambda s: s["start_measure"])
+        for section in sorted_sections[1:]:  # Skip first section (already handled)
+            section_tempo = section.get("tempo", default_tempo)
+            section_start_measure = section["start_measure"]
+
+            # Calculate beat offset for this section's start
+            beat_offset = _calculate_section_beat_offset(state.sections, section_start_measure, default_time_sig)
+            tick_position = _beats_to_ticks(beat_offset)
+
+            # Create tempo event
+            tempo_events.append({
+                "type": "tempo",
+                "tempo": section_tempo,
+                "tick": tick_position
+            })
+
+    # Sort tempo events by tick and add to tempo track
+    tempo_events.sort(key=lambda e: e["tick"])
+    prev_tick = 0
+    for event in tempo_events:
+        abs_tick = event["tick"]
+        delta = abs_tick - prev_tick
+        prev_tick = abs_tick
+
+        microseconds_per_beat = int(60_000_000 / event["tempo"])
+        tempo_track.append(mido.MetaMessage("set_tempo", tempo=microseconds_per_beat, time=delta))
+
+    # Add end of track to tempo track
+    tempo_track.append(mido.MetaMessage("end_of_track", time=0))
+
     # Group notes by track
     tracks_notes: Dict[str, List[Dict]] = {}
     for note in state.notes:
@@ -376,31 +436,12 @@ def export_midi(filepath: str) -> str:
             program = _get_instrument_program(instrument)
             midi_track.append(mido.Message("program_change", program=program, channel=channel, time=0))
 
-        # Set tempo from first section (or default to 120 BPM)
-        if state.sections:
-            tempo = state.sections[0].get("tempo", 120)
-        else:
-            tempo = 120
-
-        # Convert BPM to microseconds per beat
-        microseconds_per_beat = int(60_000_000 / tempo)
-        midi_track.append(mido.MetaMessage("set_tempo", tempo=microseconds_per_beat, time=0))
-
-        # Add time signature from first section (or default to 4/4)
-        if state.sections:
-            time_sig = state.sections[0].get("time_signature", "4/4")
-        else:
-            time_sig = "4/4"
-
-        numerator, denominator = map(int, time_sig.split("/"))
-        midi_track.append(mido.MetaMessage(
-            "time_signature",
-            numerator=numerator,
-            denominator=denominator,
-            clocks_per_click=24,
-            notated_32nd_notes_per_beat=8,
-            time=0
-        ))
+        # Set volume and pan (CC messages)
+        track_state = state.tracks[track_name]
+        volume = track_state.get("volume", 100)
+        pan = track_state.get("pan", 64)
+        midi_track.append(mido.Message("control_change", control=7, value=volume, channel=channel, time=0))
+        midi_track.append(mido.Message("control_change", control=10, value=pan, channel=channel, time=0))
 
         # Create events for all notes in this track
         events = []
@@ -419,7 +460,7 @@ def export_midi(filepath: str) -> str:
             events.append({
                 "type": "note_on",
                 "note": pitch,
-                "velocity": DEFAULT_VELOCITY,
+                "velocity": note.get("velocity", DEFAULT_VELOCITY),
                 "tick": start_ticks,
                 "channel": channel
             })

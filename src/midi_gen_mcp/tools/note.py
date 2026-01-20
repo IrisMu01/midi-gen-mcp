@@ -47,6 +47,7 @@ def add_notes(notes: List[dict]) -> str:
             - pitch (int): MIDI note number (0-127)
             - start (str/float): Start time in beats (quarter notes)
             - duration (str/float): Duration in beats
+            - velocity (int, optional): Note velocity (0-127, default 64) - controls dynamics
 
     Returns:
         Confirmation message
@@ -54,7 +55,7 @@ def add_notes(notes: List[dict]) -> str:
     Examples:
         >>> add_notes([
         ...     {"track": "piano", "pitch": 60, "start": 0, "duration": 1},
-        ...     {"track": "piano", "pitch": 64, "start": "1/3", "duration": "1/3"}
+        ...     {"track": "piano", "pitch": 64, "start": "1/3", "duration": "1/3", "velocity": 100}
         ... ])
     """
     before_mutation()
@@ -75,6 +76,11 @@ def add_notes(notes: List[dict]) -> str:
         # Validate pitch
         if not isinstance(note["pitch"], int) or not (0 <= note["pitch"] <= 127):
             return f"Error: Pitch must be an integer between 0-127, got {note['pitch']}"
+
+        # Validate velocity if provided
+        if "velocity" in note:
+            if not isinstance(note["velocity"], int) or not (0 <= note["velocity"] <= 127):
+                return f"Error: Velocity must be an integer between 0-127, got {note['velocity']}"
 
         # Validate that start and duration can be evaluated
         try:

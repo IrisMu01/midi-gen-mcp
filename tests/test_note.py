@@ -60,6 +60,25 @@ def test_add_notes_invalid_pitch():
     assert "Pitch" in result
 
 
+def test_add_notes_invalid_velocity():
+    """Test adding notes with invalid velocity."""
+    add_track("piano", "piano")
+
+    # Test velocity too low
+    result = add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1, "velocity": -1},
+    ])
+    assert "Error" in result
+    assert "Velocity" in result
+
+    # Test velocity too high
+    result = add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1, "velocity": 128},
+    ])
+    assert "Error" in result
+    assert "Velocity" in result
+
+
 def test_add_notes_invalid_expression():
     """Test adding notes with invalid expression."""
     add_track("piano", "piano")
@@ -234,3 +253,81 @@ def test_notes_support_undo():
 
     state = get_state()
     assert len(state.notes) == 0
+
+
+# ============================================================================
+# NEW FEATURE TESTS: Velocity Support
+# ============================================================================
+
+
+def test_add_notes_with_velocity():
+    """Test adding notes with explicit velocity values."""
+    add_track("piano", "piano")
+
+    add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1, "velocity": 30},
+        {"track": "piano", "pitch": 64, "start": 1, "duration": 1, "velocity": 100},
+        {"track": "piano", "pitch": 67, "start": 2, "duration": 1, "velocity": 127},
+    ])
+
+    state = get_state()
+    assert len(state.notes) == 3
+    assert state.notes[0]["velocity"] == 30
+    assert state.notes[1]["velocity"] == 100
+    assert state.notes[2]["velocity"] == 127
+
+
+def test_add_notes_without_velocity():
+    """Test adding notes without velocity field (should still work)."""
+    add_track("piano", "piano")
+
+    # Notes without velocity field should be accepted
+    add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1},
+    ])
+
+    state = get_state()
+    assert len(state.notes) == 1
+    # Velocity field may not be present, which is fine (defaults applied during export)
+
+
+def test_add_notes_velocity_undo():
+    """Test that adding notes with velocity supports undo."""
+    add_track("piano", "piano")
+
+    add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1, "velocity": 100},
+    ])
+
+    state = get_state()
+    assert len(state.notes) == 1
+    assert state.notes[0]["velocity"] == 100
+
+    from midi_gen_mcp.state import undo_last_action
+
+    undo_last_action()
+
+    state = get_state()
+    assert len(state.notes) == 0
+
+
+def test_add_notes_velocity_redo():
+    """Test that adding notes with velocity supports redo."""
+    add_track("piano", "piano")
+
+    add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1, "velocity": 100},
+    ])
+
+    from midi_gen_mcp.state import undo_last_action, redo_last_action
+
+    undo_last_action()
+
+    state = get_state()
+    assert len(state.notes) == 0
+
+    redo_last_action()
+
+    state = get_state()
+    assert len(state.notes) == 1
+    assert state.notes[0]["velocity"] == 100
