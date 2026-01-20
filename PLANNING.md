@@ -156,14 +156,32 @@ midi_track.append(mido.Message("control_change", control=10, value=pan, channel=
 
 ---
 
-## Out of Scope (PoC Stage)
+## Test Cases
 
-**Not implementing yet:**
-- CC11 (Expression) - Requires time-varying automation infrastructure, mainly for orchestral libraries
-- CC1 (Modulation), CC64 (Sustain pedal) - Less critical for basic composition
-- Articulation mapping - Complex, DAW-specific
-- Time-varying automation curves - Future feature for UI phase
-- Electron frontend - Deferred until MIDI quality validated
+### Valid Input Tests
+- [ ] Velocity values: 0, 1, 64, 127 (boundary and typical values)
+- [ ] Volume values: 0, 50, 100, 127
+- [ ] Pan values: 0 (hard left), 64 (center), 127 (hard right)
+- [ ] Multiple tempo sections: 60 → 120 → 90 BPM across 3+ sections
+- [ ] Notes with and without explicit velocity (test default fallback)
+
+### Invalid Input Tests (Expect MCP Server Errors)
+- [ ] Velocity out of range: -1, 128, 256, 1000
+- [ ] Volume out of range: -10, 128, 200
+- [ ] Pan out of range: -1, 128, 300
+- [ ] Tempo invalid: 0, -60, 1000 BPM (too slow/fast)
+- [ ] Invalid time signature strings: "4", "4/", "/4", "0/4", "4/0"
+- [ ] Invalid note pitch: -1, 128 (MIDI valid range is 0-127)
+- [ ] Invalid expression syntax: "1 + + 2", "garbage", "import os"
+- [ ] Track operations on non-existent tracks
+- [ ] Section operations with invalid measure ranges (start > end, start < 1)
+
+### Edge Cases
+- [ ] Velocity = 0 (note off via note-on with velocity 0, valid MIDI)
+- [ ] Volume = 0 (silent track, valid)
+- [ ] Tempo changes on same measure as previous section ends
+- [ ] Overlapping sections with different time signatures
+- [ ] Very large files: 10,000+ notes across 50+ sections
 
 ---
 
@@ -174,21 +192,5 @@ midi_track.append(mido.Message("control_change", control=10, value=pan, channel=
 - [ ] Volume/pan per-track exports to DAW mixer
 - [ ] All changes are backwards compatible (optional parameters)
 - [ ] Existing tests pass, new tests added for new features
-
----
-
-## Future Considerations
-
-### Velocity vs Volume vs Expression (Reference)
-- **Velocity** (note-on): Per-note attack, affects volume AND timbre (good libraries)
-- **CC7 (Volume)**: Per-track mixer level, affects all notes equally, pure amplitude
-- **CC10 (Pan)**: Stereo positioning (0=left, 64=center, 127=right)
-- **CC11 (Expression)**: Secondary dynamic control for phrase-level crescendos/diminuendos, commonly used in orchestral libraries
-
-**PoC Priority:** Velocity (essential) > Volume/Pan (useful) > Expression (niche, needs automation)
-
----
-
-## Notes
-
-Current focus: **MIDI export quality improvements** for PoC evaluation. Goal is to export high-quality MIDI that sounds good in professional DAWs, not to build UI/frontend yet.
+- [ ] Invalid inputs return clear error messages (not crashes)
+- [ ] Error messages specify valid ranges (e.g., "velocity must be 0-127, got 200")

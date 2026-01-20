@@ -215,12 +215,27 @@ To implement a chord progression:
 - Manual note editing (add/remove/move notes)
 - Export MIDI file
 
-**Out of Scope (Prototype):**
-- MIDI velocity/expression/articulation
-- Automation curves
+**PoC Stage (Current - MIDI Quality Focus):**
+- MIDI velocity support (per-note dynamics)
+- Per-track volume/pan via CC7/CC10 messages
+- Multi-section tempo changes
+
+**Out of Scope (PoC Stage):**
+- CC11 (Expression) - Requires time-varying automation infrastructure, mainly for orchestral libraries
+- CC1 (Modulation), CC64 (Sustain pedal) - Less critical for basic composition
+- Articulation mapping - Complex, DAW-specific
+- Time-varying automation curves - Future feature for UI phase
+- Electron frontend - Deferred until MIDI quality validated
 - Plugin support
-- Per-track volume/pan
-- Multiple song directory (single song for prototype)
+- Multiple song directory (single song for PoC)
+
+**MIDI Controller Reference:**
+- **Velocity** (note-on, 0-127): Per-note attack, affects volume AND timbre on quality sound libraries
+- **CC7 (Volume, 0-127)**: Per-track mixer level, affects all notes equally, pure amplitude
+- **CC10 (Pan, 0-127)**: Stereo positioning (0=hard left, 64=center, 127=hard right)
+- **CC11 (Expression, 0-127)**: Secondary dynamic control for phrase-level crescendos/diminuendos, commonly used in orchestral libraries but ignored by basic GM soundfonts
+
+**Implementation Priority:** Velocity (essential, biggest impact) > CC7/CC10 (useful for mixing) > CC11 (niche, requires automation)
 
 **Architecture:**
 ```
