@@ -1,376 +1,194 @@
 # Planning Document
 
-This file is for planning future implementation changes and features.
+This file tracks current implementation priorities for the MCP server.
 
 ---
 
 ## Current Status
 
-The MCP server implementation is complete with all core features:
-- 14 MCP tools across 5 categories (song, structure, track, note, utility)
-- Expression evaluation for note timing (e.g., "9 + 1/3")
+The MCP server is functionally complete with:
+- Core MIDI composition tools (song, structure, track, note operations)
+- Chord progression tracking with validation tools
+- Expression evaluation for note timing
 - MIDI export with General MIDI instrument mapping
-- Undo/redo with 10-snapshot limit
-- 71 passing unit tests
+- Undo/redo support
 
-See `DESIGN_DOC.md` for full architecture and `README.md` for usage.
-
----
-
-## Planned Feature: Explicit Chord Progression Tracking + Self-Correction
-
-### Motivation
-
-Current observations from testing:
-1. Claude plans chord progressions in section descriptions but executes differently (planned F6/9, wrote Cadd11)
-2. Harmony details buried in free-form text → LLM doesn't consistently reference them
-3. No verification mechanism to catch melody-harmony conflicts
-
-### Solution: First-Class Harmony State + Validation Tools
-
-Make chord progression a **tracked, queryable data structure** with **self-correction workflow**.
+See `DESIGN_DOC.md` for architecture and `README.md` for usage.
 
 ---
 
-## Implementation Plan
+## Current PoC Stage: MIDI Quality Focus
 
-### Task 1: Extend State Schema
+**Goal:** Improve MIDI export quality for evaluation in professional DAWs (Logic, Ableton, MuseScore).
 
-**File:** `src/midi_gen_mcp/state.py`
+**Philosophy:** No frontend UI yet. Export to existing DAWs for listening/testing. Validate core composition quality before building interface.
+
+---
+
+## Priority Tasks
+
+### Task 1: Fix Tempo Change Bug
+
+**Problem:** Only the first section's tempo is exported. Tempo changes after bar 1 are ignored.
+
+**Root Cause (midi_export.py:379-387):**
+```python
+# Only reads first section's tempo
+if state.sections:
+    tempo = state.sections[0].get("tempo", 120)
+else:
+    tempo = 120
+
+# Only writes tempo at time=0
+midi_track.append(mido.MetaMessage("set_tempo", tempo=microseconds_per_beat, time=0))
+```
+
+**Solution:**
+1. Collect tempo changes from all sections (sorted by start_measure)
+2. Calculate tick position for each section's start using `_calculate_section_beat_offset()`
+3. Insert `set_tempo` meta messages at the correct tick positions
+4. Mix tempo events into the event stream alongside note events
+5. Convert to delta times during final MIDI track assembly
+
+**Design Decision:** Create tempo events per-track (current approach) OR create a dedicated tempo track (track 0). Tempo track is cleaner for multi-track MIDI files.
+
+**Files to modify:**
+- `src/midi_gen_mcp/midi_export.py`
+
+**Testing:**
+- Create piece with 3+ sections, different tempos (e.g., 72 → 120 → 90 BPM)
+- Export MIDI, import into Logic/Ableton
+- Verify tempo changes occur at correct measures
+
+---
+
+### Task 2: Add Velocity Support
+
+**Motivation:** Essential for expressive/realistic MIDI. Currently all notes hardcoded to velocity 64 (medium).
 
 **Changes:**
+
+#### 2a. Note Schema
+Add optional `velocity` field (0-127, default 64):
 ```python
-@dataclass
-class State:
-    title: str
-    tracks: dict[str, dict[str, Any]]
-    notes: list[dict[str, Any]]  # NEW: notes can have optional "flagged": bool field
-    sections: list[dict[str, Any]]
-    chord_progression: list[dict[str, Any]]  # NEW: [{beat, chord, duration, chord_tones}]
-    undo_stack: list[dict[str, Any]]
-    redo_stack: list[dict[str, Any]]
+{
+    "track": "piano",
+    "pitch": 60,
+    "start": 0,
+    "duration": 1,
+    "velocity": 80  # NEW: optional
+}
 ```
 
-**Update:**
-- `snapshot_state()` to include `chord_progression`
-- `restore_state()` to restore `chord_progression`
+#### 2b. Update MCP Tools
+**File:** `src/midi_gen_mcp/tools/notes.py`
+- `add_notes()`: Accept `velocity` in note dicts (optional)
+- No breaking changes (defaults to 64 if not provided)
+
+#### 2c. Update MIDI Export
+**File:** `src/midi_gen_mcp/midi_export.py` (line 422)
+```python
+# Replace:
+"velocity": DEFAULT_VELOCITY,
+
+# With:
+"velocity": note.get("velocity", DEFAULT_VELOCITY),
+```
+
+**Testing:**
+- Add notes with varying velocities (30, 64, 100, 127)
+- Export MIDI, check velocity values in DAW piano roll
+- Verify default (64) works when velocity not specified
 
 ---
 
-### Task 2: Chord Parser Module
+### Task 3: Add Track Volume & Pan (CC Messages)
 
-**New File:** `src/midi_gen_mcp/chord_parser.py`
+**Motivation:** Enable basic mixing control. Initial volume/pan settings exported to MIDI as CC7/CC10 messages.
 
-**Purpose:** Wrapper around `pychord` library with error handling
+**Implementation:**
 
-**Key Functions:**
+#### 3a. Track Schema
+**File:** `src/midi_gen_mcp/state.py`
 ```python
-def parse_chord_symbol(symbol: str) -> dict:
-    """
-    Parse chord symbol and return chord tones.
-
-    Args:
-        symbol: Chord symbol string (e.g., "Cm7", "G7", "Fmaj9")
-
-    Returns:
-        {
-            "chord": str,           # Original symbol
-            "chord_tones": List[str]  # Pitch classes ["C", "E", "G", "Bb"]
-        }
-
-    Raises:
-        ValueError: If chord symbol not recognized by pychord
-    """
-
-def get_supported_qualities() -> List[str]:
-    """Return list of supported chord qualities for error messages."""
+# tracks dict values now include:
+{
+    "name": "piano",
+    "instrument": "acoustic_grand_piano",
+    "volume": 100,  # NEW: CC7 (0-127, default 100)
+    "pan": 64       # NEW: CC10 (0=left, 64=center, 127=right, default 64)
+}
 ```
 
-**Dependencies:** Add `pychord` to `pyproject.toml`
+#### 3b. Update add_track Tool
+**File:** `src/midi_gen_mcp/tools/tracks.py`
+```python
+def add_track(
+    name: str,
+    instrument: str,
+    volume: int = 100,  # NEW
+    pan: int = 64       # NEW
+) -> str:
+```
 
-**Error Handling:**
-- If chord symbol not recognized, raise `ValueError` with:
-  - Invalid symbol
-  - List of supported qualities (from pychord constants)
-  - Examples: ["C", "Cm", "C7", "Cmaj7", "Cdim", "Caug", "Csus4", "C9", "C13"]
+**Validation:**
+- Volume: 0-127 (MIDI valid range)
+- Pan: 0-127 (0=hard left, 64=center, 127=hard right)
 
-**Enharmonics:** Use whatever pychord returns (C# vs Db), document this behavior
+#### 3c. Update MIDI Export
+**File:** `src/midi_gen_mcp/midi_export.py` (after line 377)
+
+After `program_change`, insert CC messages:
+```python
+track_state = state.tracks[track_name]
+volume = track_state.get("volume", 100)
+pan = track_state.get("pan", 64)
+
+# Insert at time=0
+midi_track.append(mido.Message("control_change", control=7, value=volume, channel=channel, time=0))
+midi_track.append(mido.Message("control_change", control=10, value=pan, channel=channel, time=0))
+```
+
+**Testing:**
+- Create tracks with volume=50, pan=0 (hard left)
+- Create tracks with volume=127, pan=127 (hard right)
+- Export MIDI, check mixer settings in DAW
 
 ---
 
-### Task 3: Harmony Tools
+## Out of Scope (PoC Stage)
 
-**New File:** `src/midi_gen_mcp/tools/harmony.py`
-
-**Tools (3 total):**
-
-#### 1. `add_chords`
-```python
-def add_chords(chords: List[dict]) -> dict:
-    """
-    Add chord progression to the piece.
-
-    Args:
-        chords: List of {beat: float, chord: str, duration: float}
-
-    Returns:
-        {
-            "success": bool,
-            "chords_added": List[{beat, chord, duration, chord_tones}],
-            "errors": List[{invalid_chord, error, supported_qualities}] (if any)
-        }
-
-    Behavior:
-        - Validates each chord symbol using chord_parser
-        - If all valid: adds to state.chord_progression, returns success
-        - If any invalid: returns error with helpful message, state unchanged
-    """
-```
-
-#### 2. `get_chords_in_range`
-```python
-def get_chords_in_range(start_beat: float, end_beat: float) -> List[dict]:
-    """
-    Get all chords in a beat range.
-
-    Returns: List[{beat, chord, duration, chord_tones}]
-    """
-```
-
-#### 3. `remove_chords_in_range`
-```python
-def remove_chords_in_range(start_beat: float, end_beat: float) -> str:
-    """
-    Remove chords in a beat range.
-
-    Side effects:
-        - Clears ALL flagged notes (harmony context is now stale)
-
-    Returns: Confirmation message
-    """
-```
-
----
-
-### Task 4: Validation Tools
-
-**New File:** `src/midi_gen_mcp/tools/validation.py`
-
-**Tools (2 total):**
-
-#### 1. `flag_notes`
-```python
-def flag_notes(tracks: List[str], start_beat: float, end_beat: float) -> int:
-    """
-    Flag notes that fall outside the planned chord progression.
-
-    Args:
-        tracks: Which tracks to check (e.g., ["piano", "bass"])
-        start_beat, end_beat: Beat range
-
-    Returns:
-        Number of notes flagged
-
-    Behavior:
-        - Auto-clears ALL previous flags first
-        - For each note in range:
-          - Find active chord at note's start beat
-          - Check if note's pitch is in chord_tones
-          - If not, set note["flagged"] = True
-        - Returns count of flagged notes
-
-    Error handling:
-        - If no chord_progression defined: return error
-        - If note's beat has no active chord: flag it (missing harmony)
-    """
-```
-
-#### 2. `remove_flagged_notes`
-```python
-def remove_flagged_notes() -> List[dict]:
-    """
-    Remove all flagged notes from state.
-
-    Returns:
-        List of removed notes (using standard note schema)
-        [{track, pitch, start, duration}]
-
-    Side effects:
-        - Removes notes where flagged=True
-        - No need to clear flagged field (notes are deleted)
-    """
-```
-
----
-
-### Task 5: Tool Registration
-
-**File:** `src/midi_gen_mcp/server.py`
-
-**Register 5 new tools:**
-- `add_chords` (harmony.py)
-- `get_chords_in_range` (harmony.py)
-- `remove_chords_in_range` (harmony.py)
-- `flag_notes` (validation.py)
-- `remove_flagged_notes` (validation.py)
-
-**Total tool count:** 14 → 19 tools
-
----
-
-### Task 6: Tests
-
-**New Files:**
-- `tests/test_chord_parser.py` (15 tests)
-- `tests/test_harmony_tools.py` (20 tests)
-- `tests/test_validation_tools.py` (15 tests)
-
-**Coverage:**
-
-#### Chord Parser Tests (15)
-- Valid chord symbols (major, minor, 7th, maj7, dim, aug, sus, 9, 11, 13, add9)
-- Invalid chord symbols (error handling)
-- Enharmonic equivalents (C# vs Db)
-- Edge cases (empty string, special characters)
-
-#### Harmony Tools Tests (20)
-- `add_chords`: valid symbols, invalid symbols, batch operations
-- `add_chords`: overlapping chord ranges (later takes precedence)
-- `get_chords_in_range`: normal range, empty range, partial overlap
-- `remove_chords_in_range`: removes chords, clears flags
-- Undo/redo with chord operations
-
-#### Validation Tools Tests (15)
-- `flag_notes`: notes in chord (not flagged)
-- `flag_notes`: notes outside chord (flagged)
-- `flag_notes`: multiple tracks
-- `flag_notes`: auto-clears previous flags
-- `flag_notes`: error when no chord progression
-- `remove_flagged_notes`: returns correct schema
-- `remove_flagged_notes`: only removes flagged notes
-- Integration: flag → remove → add → verify
-
-**Target:** All 101 tests passing (71 existing + 30 new)
-
----
-
-### Task 7: Documentation
-
-#### Update README.md
-- Add "Harmony Tools" section with examples
-- Add "Validation Tools" section with self-correction workflow
-- Document supported chord symbols (link to pychord)
-- Add example: melody → chords → harmonize → validate → fix
-
-#### Update DESIGN_DOC.md
-- Add harmony tools to tool categories
-- Update compositional workflow (add chord planning phase)
-- Update context window estimates (chord progression ~500 tokens)
-
----
-
-### Task 8: Edge Cases & Design Decisions
-
-#### Chord Overlap Behavior
-```python
-add_chords([
-    {"beat": 0, "chord": "C7", "duration": 8},
-    {"beat": 4, "chord": "F7", "duration": 4}  # Overlaps beats 4-8
-])
-```
-**Decision:** Overlapping calls are allowed. When a later chord overlaps with an existing chord, the original longer chord should be split and partially removed to make room for the later chord. The later chord takes precedence in the overlapping region.
-
-#### Missing Chord at Beat
-```python
-# Chords: C7 at beat 0-4, G7 at beat 8-12
-# Note at beat 6 (gap!)
-flag_notes(["melody"], 0, 16)
-```
-**Decision:** Missing harmony is NOT an error. If chords are missing in a section, no notes in that section will be flagged. Only notes that fall within an active chord's duration will be checked for harmony conflicts.
-
-#### Enharmonic Normalization
-**Decision:** Use pychord's default (no custom enharmonic logic). Document that C# and Db are distinct.
-
-#### Multiple Tracks in `flag_notes`
-```python
-flag_notes(["melody", "piano", "bass"], 0, 16)
-```
-**Decision:** Flag notes across all specified tracks (useful for checking full arrangement)
-
----
-
-### Task 9: Integration Testing
-
-**Manual Test Scenarios:**
-
-1. **Happy Path: Melody → Harmony**
-   - Add melody
-   - Plan chords with `add_chords`
-   - Verify with `flag_notes` (expect 0)
-   - Add harmony notes
-
-2. **Self-Correction Path:**
-   - Add melody with intentional wrong note
-   - Plan chords
-   - Flag notes (expect >0)
-   - Remove flagged notes
-   - Add corrected notes
-   - Re-flag (expect 0)
-
-3. **Chord Change Invalidates Flags:**
-   - Add melody
-   - Plan chords (Cm7)
-   - Flag notes (some flagged)
-   - Change chord to C7
-   - Verify flags were auto-cleared
-
-4. **Undo/Redo with Chords:**
-   - Add chords
-   - Add notes
-   - Flag notes
-   - Undo (chords removed, flags cleared)
-   - Redo (chords restored)
-
----
-
-### Task 10: Migration Path
-
-**Backwards Compatibility:**
-- Existing compositions have no chord_progression → empty list
-- Existing tools (add_notes, etc.) work unchanged
-- New tools are optional (old workflow still valid)
-
-**No Breaking Changes:**
-- State schema only adds fields, doesn't modify existing ones
-- Undo/redo snapshots include new fields (old snapshots compatible via default values)
+**Not implementing yet:**
+- CC11 (Expression) - Requires time-varying automation infrastructure, mainly for orchestral libraries
+- CC1 (Modulation), CC64 (Sustain pedal) - Less critical for basic composition
+- Articulation mapping - Complex, DAW-specific
+- Time-varying automation curves - Future feature for UI phase
+- Electron frontend - Deferred until MIDI quality validated
 
 ---
 
 ## Success Criteria
 
-- [ ] All 101 tests passing (71 existing + 30 new)
-- [ ] pychord dependency installed and working
-- [ ] Invalid chord symbols return helpful error messages
-- [ ] `flag_notes` correctly identifies non-harmonic notes
-- [ ] Self-correction workflow (flag → remove → fix) works end-to-end
-- [ ] Undo/redo preserves chord_progression state
-- [ ] Skill documentation teaches workflow without being prescriptive
-- [ ] README examples demonstrate typical usage
+- [ ] Tempo changes work across multiple sections
+- [ ] Velocity per-note controls dynamics
+- [ ] Volume/pan per-track exports to DAW mixer
+- [ ] All changes are backwards compatible (optional parameters)
+- [ ] Existing tests pass, new tests added for new features
 
 ---
 
-## Future Enhancements (Not in Scope)
+## Future Considerations
 
-- Jazz chord extensions (alt, #9, b13) via manual parser
-- Chord symbol suggestions when invalid symbol provided
-- Auto-suggest chord progression based on melody
-- Visualize chord progression in frontend (chord chart above piano roll)
-- Strictness levels for `flag_notes` (allow passing tones, neighbor tones)
+### Velocity vs Volume vs Expression (Reference)
+- **Velocity** (note-on): Per-note attack, affects volume AND timbre (good libraries)
+- **CC7 (Volume)**: Per-track mixer level, affects all notes equally, pure amplitude
+- **CC10 (Pan)**: Stereo positioning (0=left, 64=center, 127=right)
+- **CC11 (Expression)**: Secondary dynamic control for phrase-level crescendos/diminuendos, commonly used in orchestral libraries
+
+**PoC Priority:** Velocity (essential) > Volume/Pan (useful) > Expression (niche, needs automation)
 
 ---
 
 ## Notes
 
-Current focus: **Explicit chord tracking + self-correction workflow** to address observed LLM harmonization errors.
-
-Principle: Keep tools deterministic. Chord parsing is deterministic (pychord). Validation is deterministic (note in chord_tones or not). Creative decisions (which chords, which voicings) stay in LLM + skills.
+Current focus: **MIDI export quality improvements** for PoC evaluation. Goal is to export high-quality MIDI that sounds good in professional DAWs, not to build UI/frontend yet.
