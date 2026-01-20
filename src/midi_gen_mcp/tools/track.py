@@ -3,13 +3,15 @@
 from midi_gen_mcp.state import get_state, before_mutation
 
 
-def add_track(name: str, instrument: str) -> str:
+def add_track(name: str, instrument: str, volume: int = 100, pan: int = 64) -> str:
     """
     Add a new track to the piece.
 
     Args:
         name: Track name (must be unique)
         instrument: Instrument name (e.g., "piano", "violin", "drums")
+        volume: Track volume (0-127, default 100) - MIDI CC7
+        pan: Track pan (0=hard left, 64=center, 127=hard right, default 64) - MIDI CC10
 
     Returns:
         Confirmation message
@@ -21,9 +23,19 @@ def add_track(name: str, instrument: str) -> str:
     if name in state.tracks:
         return f"Error: Track '{name}' already exists"
 
+    # Validate volume range
+    if not (0 <= volume <= 127):
+        return f"Error: volume must be 0-127, got {volume}"
+
+    # Validate pan range
+    if not (0 <= pan <= 127):
+        return f"Error: pan must be 0-127, got {pan}"
+
     state.tracks[name] = {
         "name": name,
-        "instrument": instrument
+        "instrument": instrument,
+        "volume": volume,
+        "pan": pan
     }
 
     return f"Added track '{name}' ({instrument})"

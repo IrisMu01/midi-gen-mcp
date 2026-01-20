@@ -109,10 +109,10 @@ def test_export_midi_simple(temp_midi_file):
 
     # Verify MIDI file structure
     midi = mido.MidiFile(temp_midi_file)
-    assert len(midi.tracks) == 1
+    assert len(midi.tracks) == 2  # Tempo Track + 1 instrument track
 
-    # Check that notes are present
-    note_on_messages = [msg for msg in midi.tracks[0] if msg.type == "note_on"]
+    # Check that notes are present (in track 1, track 0 is Tempo Track)
+    note_on_messages = [msg for msg in midi.tracks[1] if msg.type == "note_on"]
     assert len(note_on_messages) == 3
 
 
@@ -134,9 +134,9 @@ def test_export_midi_multiple_tracks(temp_midi_file):
     assert "3 tracks" in result
     assert os.path.exists(temp_midi_file)
 
-    # Verify MIDI file has 3 tracks
+    # Verify MIDI file has 4 tracks (Tempo Track + 3 instrument tracks)
     midi = mido.MidiFile(temp_midi_file)
-    assert len(midi.tracks) == 3
+    assert len(midi.tracks) == 4
 
 
 def test_export_midi_drums_on_channel_9(temp_midi_file):
@@ -305,7 +305,7 @@ def test_export_midi_program_change(temp_midi_file):
 
     midi = mido.MidiFile(temp_midi_file)
 
-    # Check for program change message
-    program_msgs = [msg for msg in midi.tracks[0] if msg.type == "program_change"]
+    # Check for program change message (in track 1, track 0 is Tempo Track)
+    program_msgs = [msg for msg in midi.tracks[1] if msg.type == "program_change"]
     assert len(program_msgs) > 0
     assert program_msgs[0].program == 40  # Violin
