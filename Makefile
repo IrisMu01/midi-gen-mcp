@@ -13,7 +13,7 @@ inspect:
 	npx @modelcontextprotocol/inspector \
   	uv \
   	--directory /Users/lingyimu/Projects/midi-gen-mcp/src/midi_gen_mcp \
-  	run \ 
+  	run \
 	midi-gen-mcp \
 
 clean:
