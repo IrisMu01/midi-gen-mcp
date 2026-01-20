@@ -154,3 +154,132 @@ def test_get_tracks_returns_copy():
     # Modifying one shouldn't affect the other
     tracks1["fake"] = {"name": "fake"}
     assert "fake" not in tracks2
+
+
+# ============================================================================
+# NEW FEATURE TESTS: Volume and Pan Support
+# ============================================================================
+
+
+def test_add_track_with_volume_and_pan():
+    """Test adding a track with custom volume and pan values."""
+    reset_state()
+
+    result = add_track("piano", "piano", volume=50, pan=127)
+    assert result == "Added track 'piano' (piano)"
+
+    tracks = get_tracks()
+    assert tracks["piano"]["volume"] == 50
+    assert tracks["piano"]["pan"] == 127
+
+
+def test_add_track_volume_and_pan_defaults():
+    """Test that volume and pan have default values."""
+    reset_state()
+
+    result = add_track("piano", "piano")
+    assert result == "Added track 'piano' (piano)"
+
+    tracks = get_tracks()
+    assert tracks["piano"]["volume"] == 100  # Default volume
+    assert tracks["piano"]["pan"] == 64  # Default pan (center)
+
+
+def test_add_track_volume_out_of_range():
+    """Test that invalid volume values are rejected."""
+    reset_state()
+
+    # Test values below 0
+    result = add_track("piano", "piano", volume=-10)
+    assert "Error" in result
+    assert "volume must be 0-127" in result
+
+    # Test values above 127
+    result = add_track("violin", "violin", volume=128)
+    assert "Error" in result
+    assert "volume must be 0-127" in result
+
+    result = add_track("bass", "bass", volume=200)
+    assert "Error" in result
+    assert "volume must be 0-127" in result
+
+    # No tracks should have been created
+    tracks = get_tracks()
+    assert len(tracks) == 0
+
+
+def test_add_track_pan_out_of_range():
+    """Test that invalid pan values are rejected."""
+    reset_state()
+
+    # Test values below 0
+    result = add_track("piano", "piano", pan=-1)
+    assert "Error" in result
+    assert "pan must be 0-127" in result
+
+    # Test values above 127
+    result = add_track("violin", "violin", pan=128)
+    assert "Error" in result
+    assert "pan must be 0-127" in result
+
+    result = add_track("bass", "bass", pan=300)
+    assert "Error" in result
+    assert "pan must be 0-127" in result
+
+    # No tracks should have been created
+    tracks = get_tracks()
+    assert len(tracks) == 0
+
+
+def test_add_track_volume_and_pan_boundary_values():
+    """Test boundary values for volume and pan (0, 127)."""
+    reset_state()
+
+    # Test minimum values
+    result1 = add_track("piano", "piano", volume=0, pan=0)
+    assert "Added track 'piano'" in result1
+
+    # Test maximum values
+    result2 = add_track("violin", "violin", volume=127, pan=127)
+    assert "Added track 'violin'" in result2
+
+    tracks = get_tracks()
+    assert tracks["piano"]["volume"] == 0
+    assert tracks["piano"]["pan"] == 0
+    assert tracks["violin"]["volume"] == 127
+    assert tracks["violin"]["pan"] == 127
+
+
+def test_add_track_with_volume_pan_undo():
+    """Test that adding track with volume/pan supports undo."""
+    reset_state()
+    from midi_gen_mcp.state import undo_last_action
+
+    add_track("piano", "piano", volume=50, pan=127)
+
+    tracks = get_tracks()
+    assert len(tracks) == 1
+    assert tracks["piano"]["volume"] == 50
+    assert tracks["piano"]["pan"] == 127
+
+    undo_last_action()
+    tracks = get_tracks()
+    assert len(tracks) == 0
+
+
+def test_add_track_with_volume_pan_redo():
+    """Test that adding track with volume/pan supports redo."""
+    reset_state()
+    from midi_gen_mcp.state import undo_last_action, redo_last_action
+
+    add_track("piano", "piano", volume=50, pan=127)
+    undo_last_action()
+
+    tracks = get_tracks()
+    assert len(tracks) == 0
+
+    redo_last_action()
+    tracks = get_tracks()
+    assert len(tracks) == 1
+    assert tracks["piano"]["volume"] == 50
+    assert tracks["piano"]["pan"] == 127

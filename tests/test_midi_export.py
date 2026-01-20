@@ -309,3 +309,154 @@ def test_export_midi_program_change(temp_midi_file):
     program_msgs = [msg for msg in midi.tracks[1] if msg.type == "program_change"]
     assert len(program_msgs) > 0
     assert program_msgs[0].program == 40  # Violin
+
+
+# ============================================================================
+# NEW FEATURE TESTS: Velocity, Volume/Pan, Multiple Tempos
+# ============================================================================
+
+
+def test_velocity_support_explicit_values(temp_midi_file):
+    """Test that notes with explicit velocity values export correctly."""
+    add_track("piano", "piano")
+    add_section("intro", 1, 4, 120, "4/4", "C")
+
+    add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1, "velocity": 30},
+        {"track": "piano", "pitch": 64, "start": 1, "duration": 1, "velocity": 100},
+        {"track": "piano", "pitch": 67, "start": 2, "duration": 1, "velocity": 127},
+    ])
+
+    export_midi(temp_midi_file)
+    midi = mido.MidiFile(temp_midi_file)
+
+    # Track 1 has the piano notes (Track 0 is Tempo Track)
+    note_on_msgs = [msg for msg in midi.tracks[1] if msg.type == "note_on"]
+    assert len(note_on_msgs) == 3
+    assert note_on_msgs[0].velocity == 30
+    assert note_on_msgs[1].velocity == 100
+    assert note_on_msgs[2].velocity == 127
+
+
+def test_velocity_support_default_fallback(temp_midi_file):
+    """Test that notes without velocity field use default value."""
+    add_track("piano", "piano")
+    add_section("intro", 1, 4, 120, "4/4", "C")
+
+    # Add notes without velocity field
+    add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1},
+    ])
+
+    export_midi(temp_midi_file)
+    midi = mido.MidiFile(temp_midi_file)
+
+    note_on_msgs = [msg for msg in midi.tracks[1] if msg.type == "note_on"]
+    assert len(note_on_msgs) == 1
+    assert note_on_msgs[0].velocity == 64  # DEFAULT_VELOCITY
+
+
+def test_velocity_boundary_values(temp_midi_file):
+    """Test velocity boundary values (0, 1, 127)."""
+    add_track("piano", "piano")
+    add_section("intro", 1, 4, 120, "4/4", "C")
+
+    add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1, "velocity": 0},
+        {"track": "piano", "pitch": 64, "start": 1, "duration": 1, "velocity": 1},
+        {"track": "piano", "pitch": 67, "start": 2, "duration": 1, "velocity": 127},
+    ])
+
+    export_midi(temp_midi_file)
+    midi = mido.MidiFile(temp_midi_file)
+
+    note_on_msgs = [msg for msg in midi.tracks[1] if msg.type == "note_on"]
+    assert note_on_msgs[0].velocity == 0
+    assert note_on_msgs[1].velocity == 1
+    assert note_on_msgs[2].velocity == 127
+
+
+def test_volume_and_pan_support(temp_midi_file):
+    """Test that volume and pan CC messages are exported."""
+    add_track("piano", "piano", volume=50, pan=0)  # Quiet, hard left
+    add_track("violin", "violin", volume=127, pan=127)  # Loud, hard right
+    add_section("intro", 1, 4, 120, "4/4", "C")
+
+    add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1},
+        {"track": "violin", "pitch": 67, "start": 0, "duration": 1},
+    ])
+
+    export_midi(temp_midi_file)
+    midi = mido.MidiFile(temp_midi_file)
+
+    # Check piano track (track 1) - volume=50, pan=0
+    piano_cc_msgs = [msg for msg in midi.tracks[1] if msg.type == "control_change"]
+    volume_msgs = [msg for msg in piano_cc_msgs if msg.control == 7]
+    pan_msgs = [msg for msg in piano_cc_msgs if msg.control == 10]
+    assert len(volume_msgs) == 1
+    assert volume_msgs[0].value == 50
+    assert len(pan_msgs) == 1
+    assert pan_msgs[0].value == 0
+
+    # Check violin track (track 2) - volume=127, pan=127
+    violin_cc_msgs = [msg for msg in midi.tracks[2] if msg.type == "control_change"]
+    volume_msgs = [msg for msg in violin_cc_msgs if msg.control == 7]
+    pan_msgs = [msg for msg in violin_cc_msgs if msg.control == 10]
+    assert len(volume_msgs) == 1
+    assert volume_msgs[0].value == 127
+    assert len(pan_msgs) == 1
+    assert pan_msgs[0].value == 127
+
+
+def test_volume_and_pan_defaults(temp_midi_file):
+    """Test that volume and pan use defaults when not specified."""
+    add_track("piano", "piano")  # Should use defaults: volume=100, pan=64
+    add_section("intro", 1, 4, 120, "4/4", "C")
+
+    add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1},
+    ])
+
+    export_midi(temp_midi_file)
+    midi = mido.MidiFile(temp_midi_file)
+
+    # Check piano track (track 1)
+    cc_msgs = [msg for msg in midi.tracks[1] if msg.type == "control_change"]
+    volume_msgs = [msg for msg in cc_msgs if msg.control == 7]
+    pan_msgs = [msg for msg in cc_msgs if msg.control == 10]
+    assert len(volume_msgs) == 1
+    assert volume_msgs[0].value == 100  # Default volume
+    assert len(pan_msgs) == 1
+    assert pan_msgs[0].value == 64  # Default pan (center)
+
+
+def test_multiple_tempo_changes(temp_midi_file):
+    """Test that multiple tempo changes across sections are exported correctly."""
+    add_track("piano", "piano")
+
+    # Create 3 sections with different tempos
+    add_section("intro", 1, 4, 72, "4/4", "C")
+    add_section("verse", 5, 8, 120, "4/4", "C")
+    add_section("chorus", 9, 12, 90, "4/4", "C")
+
+    add_notes([
+        {"track": "piano", "pitch": 60, "start": 0, "duration": 1},
+    ])
+
+    export_midi(temp_midi_file)
+    midi = mido.MidiFile(temp_midi_file)
+
+    # Track 0 is the Tempo Track
+    tempo_msgs = [msg for msg in midi.tracks[0] if msg.type == "set_tempo"]
+
+    # Should have 3 tempo changes (one for each section)
+    assert len(tempo_msgs) == 3
+
+    # Check tempo values (tempo in microseconds per beat)
+    # 72 BPM = 833333 microseconds/beat
+    # 120 BPM = 500000 microseconds/beat
+    # 90 BPM = 666666 microseconds/beat
+    assert tempo_msgs[0].tempo == int(60_000_000 / 72)
+    assert tempo_msgs[1].tempo == int(60_000_000 / 120)
+    assert tempo_msgs[2].tempo == int(60_000_000 / 90)
