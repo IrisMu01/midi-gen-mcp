@@ -181,7 +181,7 @@ midi_track.append(mido.Message("control_change", control=10, value=pan, channel=
 - [ ] Volume = 0 (silent track, valid)
 - [ ] Tempo changes on same measure as previous section ends
 - [ ] Overlapping sections with different time signatures
-- [ ] Very large files: 10,000+ notes across 50+ sections
+- [ ] Very large files: 10,000+ notes across 50+ sections (programmatically generated via loops to test performance and MIDI export scalability)
 
 ---
 
