@@ -1,0 +1,112 @@
+<mxGraphModel>
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+
+    <!-- ==================== -->
+    <!-- CONTAINER: LOCAL APP  -->
+    <!-- ==================== -->
+    <mxCell id="100" value="&lt;b&gt;Local (Tauri Desktop App)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;verticalAlign=top;dashed=1;dashPattern=5 5;fontSize=14;" vertex="1" parent="1">
+      <mxGeometry x="40" y="40" width="760" height="520" as="geometry"/>
+    </mxCell>
+
+    <!-- ==================== -->
+    <!-- FRONTEND             -->
+    <!-- ==================== -->
+    <mxCell id="200" value="&lt;b&gt;Frontend (Webview)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;React or Svelte&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="80" y="80" width="300" height="200" as="geometry"/>
+    </mxCell>
+    <mxCell id="201" value="Chat Panel&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;text prompts + streamed responses&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="100" y="120" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="202" value="Piano Roll / Tracks&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Canvas/WebGL rendering&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="240" y="120" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="203" value="Audio Playback&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Tone.js (prototype)&lt;br&gt;→ SoundFont/Rust (later)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="100" y="200" width="260" height="50" as="geometry"/>
+    </mxCell>
+
+    <!-- ==================== -->
+    <!-- TAURI BACKEND        -->
+    <!-- ==================== -->
+    <mxCell id="300" value="&lt;b&gt;Tauri Backend&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Rust&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="80" y="340" width="300" height="190" as="geometry"/>
+    </mxCell>
+    <mxCell id="301" value="&lt;b&gt;SongState&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Single source of truth&lt;br&gt;tracks, notes, sections, chords&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="100" y="380" width="130" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="302" value="&lt;b&gt;Socket Server&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;localhost:PORT&lt;br&gt;for MCP proxy&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="250" y="380" width="110" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="303" value="&lt;b&gt;cc-sdk-rs Client&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;spawns Claude CLI&lt;br&gt;streams responses&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="100" y="465" width="130" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="304" value="&lt;b&gt;Delta Tracker&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;tracks user edits&lt;br&gt;prepends to next prompt&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="250" y="465" width="110" height="55" as="geometry"/>
+    </mxCell>
+
+    <!-- ==================== -->
+    <!-- MCP SERVER           -->
+    <!-- ==================== -->
+    <mxCell id="400" value="&lt;b&gt;MCP Server&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Rust binary (stateless proxy)&lt;br&gt;Forwards tool calls to Tauri backend&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="500" y="340" width="260" height="80" as="geometry"/>
+    </mxCell>
+
+    <!-- ==================== -->
+    <!-- CLAUDE CLI           -->
+    <!-- ==================== -->
+    <mxCell id="500" value="&lt;b&gt;Claude Code CLI&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Local dependency&lt;br&gt;MCP host / client&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="500" y="460" width="260" height="70" as="geometry"/>
+    </mxCell>
+
+    <!-- ==================== -->
+    <!-- CONTAINER: ONLINE    -->
+    <!-- ==================== -->
+    <mxCell id="600" value="&lt;b&gt;Online (Anthropic API)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#333333;verticalAlign=top;dashed=1;dashPattern=5 5;fontSize=14;" vertex="1" parent="1">
+      <mxGeometry x="40" y="620" width="760" height="100" as="geometry"/>
+    </mxCell>
+    <mxCell id="601" value="&lt;b&gt;Claude LLM&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;All creative reasoning&lt;br&gt;Music theory, composition decisions&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="280" y="650" width="240" height="50" as="geometry"/>
+    </mxCell>
+
+    <!-- ==================== -->
+    <!-- EDGES                -->
+    <!-- ==================== -->
+
+    <!-- Frontend ↔ Tauri Backend (IPC) -->
+    <mxCell id="E1" value="&lt;font style=&quot;font-size:10px&quot;&gt;Tauri IPC&lt;br&gt;(state reads, user edits,&lt;br&gt;streamed responses)&lt;/font&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#6c8ebf;fontColor=#6c8ebf;entryX=0.5;entryY=0;exitX=0.5;exitY=1;" edge="1" parent="1" source="200" target="300">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Tauri Backend → Claude CLI (cc-sdk-rs spawns) -->
+    <mxCell id="E2" value="&lt;font style=&quot;font-size:10px&quot;&gt;cc-sdk-rs&lt;br&gt;(spawns subprocess,&lt;br&gt;streams responses)&lt;/font&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#82b366;fontColor=#82b366;exitX=0.5;exitY=1;entryX=0.5;entryY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="303" target="500">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="165" y="545"/>
+          <mxPoint x="630" y="545"/>
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- Claude CLI ↔ MCP Server (stdio) -->
+    <mxCell id="E3" value="&lt;font style=&quot;font-size:10px&quot;&gt;stdio&lt;br&gt;(MCP protocol)&lt;/font&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#d6b656;fontColor=#d6b656;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" edge="1" parent="1" source="500" target="400">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- MCP Server ↔ Tauri Socket Server (local socket) -->
+    <mxCell id="E4" value="&lt;font style=&quot;font-size:10px&quot;&gt;Local socket&lt;br&gt;(MIDI_DAW_SOCKET env var&lt;br&gt;newline-delimited JSON)&lt;/font&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#d6b656;fontColor=#d6b656;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="400" target="302">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Claude CLI ↔ Claude LLM (network) -->
+    <mxCell id="E5" value="&lt;font style=&quot;font-size:10px&quot;&gt;HTTPS&lt;br&gt;(Anthropic API)&lt;/font&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#b85450;fontColor=#b85450;exitX=0.5;exitY=1;entryX=0.5;entryY=0;dashed=1;" edge="1" parent="1" source="500" target="601">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="630" y="590"/>
+          <mxPoint x="400" y="590"/>
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+  </root>
+</mxGraphModel>
